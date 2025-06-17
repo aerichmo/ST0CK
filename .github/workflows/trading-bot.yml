@@ -35,15 +35,17 @@ jobs:
     - name: Configure environment
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        BROKER_API_KEY: ${{ secrets.BROKER_API_KEY }}
-        BROKER_API_SECRET: ${{ secrets.BROKER_API_SECRET }}
+        ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+        ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
       run: |
         echo "DATABASE_URL=$DATABASE_URL" > .env
-        echo "BROKER_API_KEY=$BROKER_API_KEY" >> .env
-        echo "BROKER_API_SECRET=$BROKER_API_SECRET" >> .env
+        echo "ALPACA_API_KEY=$ALPACA_API_KEY" >> .env
+        echo "ALPACA_API_SECRET=$ALPACA_API_SECRET" >> .env
+        echo "ALPACA_BASE_URL=$ALPACA_BASE_URL" >> .env
         echo "EMAIL_USERNAME=$EMAIL_USERNAME" >> .env
         echo "EMAIL_PASSWORD=$EMAIL_PASSWORD" >> .env
         echo "WEBHOOK_URL=$WEBHOOK_URL" >> .env
