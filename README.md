@@ -4,7 +4,7 @@ A specialized automated trading system focused exclusively on SPY options during
 
 ## Overview
 
-ST0CK implements a systematic opening range breakout strategy on SPY with disciplined risk management and precise option selection based on delta targeting.
+ST0CK implements a systematic opening range breakout strategy on SPY with disciplined risk management and precise option selection based on delta targeting. The system is designed to run autonomously with cloud deployment support and comprehensive monitoring.
 
 ### Key Features
 
@@ -15,6 +15,9 @@ ST0CK implements a systematic opening range breakout strategy on SPY with discip
 - **OCO Exit Strategy**: Automated profit targets and stop losses
 - **Risk Management**: Position sizing, daily loss limits, consecutive loss protection
 - **Paper Trading Mode**: Realistic market simulation with bid-ask spreads and slippage
+- **Cloud-Ready**: Supports GitHub Actions, AWS, GCP, and other cloud platforms
+- **Database Integration**: PostgreSQL for trade logging and performance analytics
+- **Real-time Monitoring**: Webhook support for Discord/Slack notifications
 
 ## Trading Strategy
 
@@ -64,6 +67,13 @@ ST0CK implements a systematic opening range breakout strategy on SPY with discip
 
 ## Installation
 
+### Prerequisites
+- Python 3.8 or higher
+- PostgreSQL database (local or cloud)
+- Git
+
+### Local Setup
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/aerichmo/ST0CK.git
@@ -83,31 +93,42 @@ pip install -r requirements.txt
 
 4. Set up PostgreSQL database:
 ```bash
+# Local database
 createdb st0ck_trading
+
+# Or use a free cloud database:
+# - Supabase: https://supabase.com (500MB free)
+# - Neon: https://neon.tech (3GB free)
 ```
 
 5. Configure environment variables:
 ```bash
-cp .env.example .env
-# Edit .env with your settings
+# Create .env file with your settings
+cat > .env << EOL
+DATABASE_URL=postgresql://localhost/st0ck_trading
+ALPACA_API_KEY=your_paper_api_key
+ALPACA_API_SECRET=your_paper_api_secret
+ALPACA_BASE_URL=https://paper-api.alpaca.markets
+WEBHOOK_URL=your_discord_webhook_url
+EOL
 ```
 
 ## Usage
 
-### Paper Trading Mode
+### Paper Trading Mode (Default)
 ```bash
-python main.py --paper
+python main.py --mode paper --capital 100000
 ```
 
-### With Custom Config
+### With Custom Database
 ```bash
-python main.py --paper --config config/custom_config.py
+python main.py --mode paper --db "postgresql://user:pass@host:5432/dbname"
 ```
 
-### Monitor Only Mode
-```bash
-python main.py --monitor
-```
+### Command-Line Options
+- `--mode`: Trading mode (`paper` or `live`, default: `paper`)
+- `--capital`: Initial trading capital (default: `100000`)
+- `--db`: Database connection string (default: `postgresql://localhost/options_scalper`)
 
 ## Configuration
 
@@ -122,6 +143,17 @@ Key configuration parameters in `config/trading_config.py`:
 
 ## Architecture
 
+### Core Components
+- **Trading Engine** (`src/trading_engine.py`): Main orchestration and scheduling
+- **Market Data Provider** (`src/market_data.py`): Real-time price and options data
+- **Trend Filter** (`src/trend_filter.py`): EMA-based trend detection
+- **Options Selector** (`src/options_selector.py`): Delta-targeted option selection
+- **Risk Manager** (`src/risk_manager.py`): Position sizing and risk limits
+- **Exit Manager** (`src/exit_manager.py`): OCO order management
+- **Database Manager** (`src/database.py`): Trade logging and analytics
+- **Broker Interface** (`src/broker_interface.py`): Paper/live trading abstraction
+
+### Design Principles
 - **Modular Design**: Clean separation of concerns
 - **Event-Driven**: Scheduled tasks and real-time monitoring
 - **Database-Backed**: PostgreSQL for trade logging and analytics
@@ -146,6 +178,43 @@ The system provides comprehensive logging and monitoring:
 - Consecutive loss protection
 - Time-based position stops
 
+## Cloud Deployment
+
+### GitHub Actions (Recommended - Free)
+The repository includes a GitHub Actions workflow for automated trading:
+
+1. Fork or push to your GitHub repository
+2. Add secrets in Settings → Secrets → Actions
+3. Enable GitHub Actions
+4. Bot runs automatically at 9:25 AM ET on weekdays
+
+See `SETUP.md` for detailed deployment instructions.
+
+### Alternative Deployment Options
+- **Railway**: One-click deploy with free PostgreSQL
+- **Google Cloud Run**: Serverless with Cloud Scheduler
+- **AWS Lambda**: Event-driven serverless execution
+- **Fly.io**: Modern PaaS with global deployment
+
+See `cloud-deployment.md` for platform-specific guides.
+
+## Development
+
+### Running Tests
+```bash
+pytest tests/
+```
+
+### Code Structure
+```
+ST0CK/
+├── config/           # Trading configuration
+├── src/             # Core trading modules
+├── logs/            # Trading logs
+├── .github/         # GitHub Actions workflows
+└── docs/            # Additional documentation
+```
+
 ## Contributing
 
 This is a specialized trading system. Any modifications should maintain the core SPY-only focus and risk management principles.
@@ -153,3 +222,7 @@ This is a specialized trading system. Any modifications should maintain the core
 ## Disclaimer
 
 This software is for educational purposes only. Trading options involves substantial risk of loss. Past performance does not guarantee future results. Always test thoroughly in paper trading mode before considering live trading.
+
+## License
+
+MIT License - See LICENSE file for details

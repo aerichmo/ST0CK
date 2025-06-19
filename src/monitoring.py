@@ -81,7 +81,8 @@ Automated Trading System
     
     def monitor_risk_breach(self, risk_metrics: Dict):
         """Monitor for risk limit breaches"""
-        if risk_metrics['daily_pnl_pct'] <= -2.5:
+        risk_threshold = self.config.get('monitoring', {}).get('risk_threshold_pct', -2.5)
+        if risk_metrics['daily_pnl_pct'] <= risk_threshold:
             self.send_alert(
                 "Risk Warning: Approaching Daily Loss Limit",
                 f"Daily P&L: {risk_metrics['daily_pnl_pct']:.2f}%\n"
@@ -101,7 +102,8 @@ Automated Trading System
     def monitor_position_alerts(self, positions: List[Dict]):
         """Monitor positions for alert conditions"""
         for position in positions:
-            if position.get('unrealized_pnl', 0) < -500:
+            loss_threshold = self.config.get('monitoring', {}).get('loss_threshold_dollars', -500)
+            if position.get('unrealized_pnl', 0) < loss_threshold:
                 self.send_alert(
                     f"Large Unrealized Loss: {position['symbol']}",
                     f"Position: {position['position_id']}\n"

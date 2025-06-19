@@ -53,5 +53,38 @@ TRADING_CONFIG = {
         "target_1_size_pct": 0.5,
         "target_2_r": 3.0,
         "time_stop_minutes": 60
+    },
+    
+    "market_simulation": {
+        "base_spread_pct": 0.02,
+        "volatility_spread_mult": 0.5,
+        "volume_spread_div": 10000,
+        "min_spread_pct": 0.01,
+        "max_spread_pct": 0.10,
+        "price_drift": 0.02,
+        "price_volatility": 0.1
+    },
+    
+    "commission": {
+        "base_rate": 0.65,
+        "tier_1_threshold": 100,
+        "tier_1_rate": 0.50,
+        "tier_2_threshold": 1000,
+        "tier_2_rate": 0.35
+    },
+    
+    "monitoring": {
+        "risk_threshold_pct": -2.5,
+        "loss_threshold_dollars": -500
+    },
+    
+    "cache": {
+        "market_data_ttl": 60,
+        "risk_free_rate_ttl": 3600
+    },
+    
+    "defaults": {
+        "risk_free_rate": 0.045,
+        "implied_volatility": 0.20
     }
 }

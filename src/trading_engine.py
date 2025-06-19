@@ -1,12 +1,11 @@
 import logging
 import schedule
 import time
-from datetime import datetime, time as dt_time
+from datetime import datetime
 import pytz
 from typing import Dict, List, Optional
 import uuid
 import json
-from concurrent.futures import ThreadPoolExecutor
 
 from config.trading_config import TRADING_CONFIG
 from src.market_data import MarketDataProvider
@@ -141,30 +140,11 @@ class TradingEngine:
             logger.warning(f"Rejecting non-SPY signal for {symbol}")
             return
             
-        # Get current price
-        quote = self.market_data.get_current_quote(symbol)
-        if not quote or quote['price'] <= 0:
-            logger.error("Failed to get SPY quote")
-            return
-        
-        current_price = quote['price']
-        
-        # Select option contract
-        contract = self.options_selector.select_option_contract(
-            symbol,
-            signal['type'],
-            current_price
-        )
-        
+        # Get and validate option contract
+        contract = self._get_valid_option_contract(symbol, signal)
         if not contract:
-            logger.warning("No suitable SPY option contract found")
             return
-        
-        # Validate liquidity
-        if not self.options_selector.validate_contract_liquidity(contract):
-            logger.warning("SPY contract failed liquidity validation")
-            return
-        
+            
         # Get option quote
         option_quote = self.broker.get_option_quote(contract['contract_symbol'])
         if not option_quote:
@@ -181,6 +161,41 @@ class TradingEngine:
             logger.warning("Position size too small for SPY")
             return
         
+        # Execute trade
+        position = self._execute_trade(symbol, signal, contract, option_quote, position_size)
+        if position:
+            logger.info(f"SPY position opened: {position['position_id']}")
+            self.send_trade_notification('ENTRY', position, signal, contract)
+    
+    def _get_valid_option_contract(self, symbol: str, signal: Dict) -> Optional[Dict]:
+        """Get and validate option contract"""
+        # Get current price
+        quote = self.market_data.get_current_quote(symbol)
+        if not quote or quote['price'] <= 0:
+            logger.error("Failed to get SPY quote")
+            return None
+        
+        # Select option contract
+        contract = self.options_selector.select_option_contract(
+            symbol,
+            signal['type'],
+            quote['price']
+        )
+        
+        if not contract:
+            logger.warning("No suitable SPY option contract found")
+            return None
+        
+        # Validate liquidity
+        if not self.options_selector.validate_contract_liquidity(contract):
+            logger.warning("SPY contract failed liquidity validation")
+            return None
+            
+        return contract
+    
+    def _execute_trade(self, symbol: str, signal: Dict, contract: Dict, 
+                      option_quote: Dict, position_size: int) -> Optional[Dict]:
+        """Execute trade and setup exit orders"""
         # Place entry order
         order_id = self.broker.place_option_order(
             contract,
@@ -190,7 +205,7 @@ class TradingEngine:
         
         if not order_id:
             logger.error("Failed to place SPY option order")
-            return
+            return None
         
         # Create position record
         position = {
@@ -225,10 +240,7 @@ class TradingEngine:
         # Log to database
         self.db.log_trade_entry(position, signal, contract, exit_levels)
         
-        logger.info(f"SPY position opened: {position['position_id']}")
-        
-        # Send notification
-        self.send_trade_notification('ENTRY', position, signal, contract)
+        return position
     
     def monitor_positions(self):
         """Monitor open SPY positions"""

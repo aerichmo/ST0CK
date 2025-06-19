@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import argparse
 import logging
@@ -49,7 +48,7 @@ def main():
         logger.info(f"Trading engine initialized with ${args.capital:,.2f} capital")
         logger.info("Press Ctrl+C to stop")
         
-        engine.run()
+        engine.run_trading_loop()
         
     except KeyboardInterrupt:
         logger.info("Shutdown requested by user")

@@ -10,6 +10,7 @@ import logging
 import time
 from functools import wraps
 from collections import defaultdict
+from src.utils import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class MarketDataProvider:
         self.config = config
         self.timezone = config["session"]["timezone"]
         self._cache = defaultdict(dict)
-        self._cache_ttl = 60  # Cache TTL in seconds
+        self._cache_ttl = config.get('cache', {}).get('market_data_ttl', 60)
         
     def get_pre_market_gappers(self) -> List[str]:
         """Find stocks gapping ≥±0.75% in pre-market with required liquidity"""

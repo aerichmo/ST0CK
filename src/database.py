@@ -1,10 +1,7 @@
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
-import json
 import logging
 from typing import Dict, List, Optional
 from collections import deque
@@ -129,80 +126,54 @@ class BatchedDatabaseManager:
                 self._flush_executions()
                 self._flush_metrics()
     
-    def _flush_trades(self):
-        """Flush pending trades to database"""
-        if not self.trade_queue:
+    def _flush_queue(self, queue, model_class, queue_name):
+        """Generic flush method for any queue"""
+        if not queue:
             return
             
         session = self.Session()
         try:
-            # Process all pending trades
-            while self.trade_queue:
-                trade_data = self.trade_queue.popleft()
-                
-                if trade_data['action'] == 'INSERT':
-                    trade = Trade(**trade_data['data'])
-                    session.add(trade)
-                elif trade_data['action'] == 'UPDATE':
-                    trade = session.query(Trade).filter_by(
-                        position_id=trade_data['position_id']
-                    ).first()
-                    if trade:
-                        for key, value in trade_data['data'].items():
-                            setattr(trade, key, value)
+            if queue_name == 'trade':
+                # Special handling for trades with actions
+                while queue:
+                    trade_data = queue.popleft()
+                    
+                    if trade_data['action'] == 'INSERT':
+                        trade = Trade(**trade_data['data'])
+                        session.add(trade)
+                    elif trade_data['action'] == 'UPDATE':
+                        trade = session.query(Trade).filter_by(
+                            position_id=trade_data['position_id']
+                        ).first()
+                        if trade:
+                            for key, value in trade_data['data'].items():
+                                setattr(trade, key, value)
+            else:
+                # Bulk insert for other queues
+                items = [model_class(**data) for data in queue]
+                session.bulk_save_objects(items)
+                queue.clear()
             
             session.commit()
-            logger.debug(f"Flushed {len(self.trade_queue)} trades to database")
+            logger.debug(f"Flushed {len(queue)} {queue_name}s to database")
             
         except Exception as e:
-            logger.error(f"Error flushing trades: {e}")
+            logger.error(f"Error flushing {queue_name}s: {e}")
             session.rollback()
-            # Re-queue failed items
-            self.trade_queue.extend(self.trade_queue)
         finally:
             session.close()
+    
+    def _flush_trades(self):
+        """Flush pending trades to database"""
+        self._flush_queue(self.trade_queue, Trade, 'trade')
     
     def _flush_executions(self):
         """Flush pending executions to database"""
-        if not self.execution_queue:
-            return
-            
-        session = self.Session()
-        try:
-            # Bulk insert all executions
-            executions = [ExecutionLog(**data) for data in self.execution_queue]
-            session.bulk_save_objects(executions)
-            session.commit()
-            
-            logger.debug(f"Flushed {len(self.execution_queue)} executions to database")
-            self.execution_queue.clear()
-            
-        except Exception as e:
-            logger.error(f"Error flushing executions: {e}")
-            session.rollback()
-        finally:
-            session.close()
+        self._flush_queue(self.execution_queue, ExecutionLog, 'execution')
     
     def _flush_metrics(self):
         """Flush pending metrics to database"""
-        if not self.metrics_queue:
-            return
-            
-        session = self.Session()
-        try:
-            # Bulk insert all metrics
-            metrics = [RiskMetrics(**data) for data in self.metrics_queue]
-            session.bulk_save_objects(metrics)
-            session.commit()
-            
-            logger.debug(f"Flushed {len(self.metrics_queue)} metrics to database")
-            self.metrics_queue.clear()
-            
-        except Exception as e:
-            logger.error(f"Error flushing metrics: {e}")
-            session.rollback()
-        finally:
-            session.close()
+        self._flush_queue(self.metrics_queue, RiskMetrics, 'metric')
     
     def log_trade_entry(self, position: Dict, signal: Dict, contract: Dict, 
                        exit_levels: Dict) -> None:

@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 import logging
 from scipy.stats import norm
-import requests
-from functools import lru_cache
 import time
 
 logger = logging.getLogger(__name__)
