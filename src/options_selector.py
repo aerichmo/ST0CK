@@ -7,6 +7,7 @@ import logging
 from scipy.stats import norm
 import requests
 from functools import lru_cache
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -15,57 +16,12 @@ class OptionsSelector:
         self.config = config
         self.target_delta = config["options"]["target_delta"]
         self.delta_tolerance = config["options"]["delta_tolerance"]
-        self._risk_free_rate = None
-        self._rate_last_updated = None
+        self._risk_free_rate_cache = None
+        self._risk_free_rate_timestamp = 0
+        self._cache_ttl = 3600  # 1 hour cache for risk-free rate
         
-    @lru_cache(maxsize=1)
-    def get_risk_free_rate(self) -> float:
-        """Get current risk-free rate from US Treasury (updates daily)"""
-        try:
-            # Check if we have a recent rate (within 24 hours)
-            if self._risk_free_rate and self._rate_last_updated:
-                if (datetime.now() - self._rate_last_updated).total_seconds() < 86400:
-                    return self._risk_free_rate
-            
-            # Fetch 3-month Treasury rate
-            url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/avg_interest_rates"
-            params = {
-                "filter": "security_desc:eq:Treasury Bills",
-                "sort": "-record_date",
-                "page[size]": 1
-            }
-            
-            response = requests.get(url, params=params, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("data"):
-                    # Convert percentage to decimal
-                    rate = float(data["data"][0]["avg_interest_rate_amt"]) / 100
-                    self._risk_free_rate = rate
-                    self._rate_last_updated = datetime.now()
-                    logger.info(f"Updated risk-free rate to {rate:.4f}")
-                    return rate
-            
-            # Fallback to Federal Reserve API
-            fed_url = "https://api.stlouisfed.org/fred/series/observations"
-            fed_params = {
-                "series_id": "DGS3MO",  # 3-Month Treasury
-                "api_key": "your_fred_api_key",  # Would need actual key
-                "file_type": "json",
-                "sort_order": "desc",
-                "limit": 1
-            }
-            
-            # If no API key or request fails, use reasonable default
-            logger.warning("Could not fetch current risk-free rate, using default")
-            return 0.05  # 5% default
-            
-        except Exception as e:
-            logger.error(f"Error fetching risk-free rate: {e}")
-            return 0.05  # 5% default
-    
     def get_weekly_expiry(self) -> str:
-        """Get the nearest weekly expiry date"""
+        """Get the nearest weekly expiry date for SPY"""
         today = datetime.now()
         days_until_friday = (4 - today.weekday()) % 7
         if days_until_friday == 0 and today.hour >= 16:
@@ -74,12 +30,57 @@ class OptionsSelector:
         next_friday = today + timedelta(days=days_until_friday)
         return next_friday.strftime('%Y-%m-%d')
     
+    def get_risk_free_rate(self) -> float:
+        """Get current risk-free rate from Treasury data"""
+        # Check cache first
+        if (self._risk_free_rate_cache is not None and 
+            time.time() - self._risk_free_rate_timestamp < self._cache_ttl):
+            return self._risk_free_rate_cache
+        
+        try:
+            # Use 13-week Treasury yield (^IRX) from Yahoo Finance
+            treasury = yf.Ticker("^IRX")
+            hist = treasury.history(period="1d")
+            
+            if not hist.empty and 'Close' in hist.columns:
+                # ^IRX is quoted as percentage, convert to decimal
+                rate = hist['Close'].iloc[-1] / 100
+                self._risk_free_rate_cache = rate
+                self._risk_free_rate_timestamp = time.time()
+                logger.info(f"Updated risk-free rate to {rate:.4f} ({rate*100:.2f}%)")
+                return rate
+        except Exception as e:
+            logger.warning(f"Failed to fetch risk-free rate from ^IRX: {e}")
+        
+        # Fallback: Try to get 10-year Treasury yield as proxy
+        try:
+            tnx = yf.Ticker("^TNX")
+            hist = tnx.history(period="1d")
+            
+            if not hist.empty and 'Close' in hist.columns:
+                # ^TNX is also quoted as percentage
+                # Adjust down slightly for shorter-term rate approximation
+                rate = (hist['Close'].iloc[-1] / 100) * 0.85
+                self._risk_free_rate_cache = rate
+                self._risk_free_rate_timestamp = time.time()
+                logger.info(f"Updated risk-free rate from ^TNX to {rate:.4f} ({rate*100:.2f}%)")
+                return rate
+        except Exception as e:
+            logger.warning(f"Failed to fetch risk-free rate from ^TNX: {e}")
+        
+        # Final fallback: Use a reasonable default based on recent history
+        default_rate = 0.045  # 4.5% default
+        logger.warning(f"Using default risk-free rate of {default_rate:.4f}")
+        return default_rate
+    
     def calculate_greeks(self, S: float, K: float, T: float, r: float, 
                         sigma: float, option_type: str) -> Dict[str, float]:
         """Calculate option Greeks using Black-Scholes"""
-        # Avoid division by zero
+        # Handle edge cases
         if T <= 0:
             T = 1/365  # Minimum 1 day
+        if sigma <= 0:
+            sigma = 0.15  # Minimum 15% volatility
             
         d1 = (np.log(S/K) + (r + sigma**2/2)*T) / (sigma*np.sqrt(T))
         d2 = d1 - sigma*np.sqrt(T)
@@ -99,36 +100,39 @@ class OptionsSelector:
             'delta': round(delta, 4),
             'gamma': round(gamma, 4),
             'theta': round(theta/365, 4),  # Daily theta
-            'vega': round(vega/100, 4),    # Vega per 1% vol change
-            'rho': round(K*T*np.exp(-r*T)*norm.cdf(d2)/100, 4) if option_type == 'CALL' 
-                   else round(-K*T*np.exp(-r*T)*norm.cdf(-d2)/100, 4)  # Rho per 1% rate change
+            'vega': round(vega/100, 4)     # Vega per 1% vol change
         }
     
     def select_option_contract(self, symbol: str, signal_type: str, 
                              current_price: float) -> Optional[Dict]:
-        """Select optimal option contract based on delta target"""
-        try:
-            # For SPY, always use SPY ticker
-            if symbol == "SPY":
-                ticker = yf.Ticker("SPY")
-            else:
-                logger.warning(f"Symbol {symbol} not supported, using SPY")
-                ticker = yf.Ticker("SPY")
-                symbol = "SPY"
+        """Select optimal SPY option contract based on delta target"""
+        # Enforce SPY-only trading
+        if symbol != 'SPY':
+            logger.warning(f"Only SPY trading is allowed, rejecting {symbol}")
+            return None
             
-            expiry = self.get_weekly_expiry()
+        try:
+            ticker = yf.Ticker(symbol)
             
             # Get dynamic risk-free rate
             r = self.get_risk_free_rate()
             
-            try:
-                option_chain = ticker.option_chain(expiry)
-            except Exception:
-                logger.warning(f"Weekly expiry not available for {symbol}, trying next available")
-                options_dates = ticker.options
-                if not options_dates:
-                    return None
-                expiry = options_dates[0]
+            # For SPY, try 0DTE first during market hours
+            now = datetime.now()
+            if now.weekday() < 5 and now.hour >= 9 and now.hour < 16:
+                # Try today's expiry first (0DTE)
+                today_expiry = now.strftime('%Y-%m-%d')
+                try:
+                    option_chain = ticker.option_chain(today_expiry)
+                    expiry = today_expiry
+                    logger.info("Using 0DTE options for SPY")
+                except:
+                    # Fall back to weekly
+                    expiry = self.get_weekly_expiry()
+                    option_chain = ticker.option_chain(expiry)
+            else:
+                # Use weekly expiry
+                expiry = self.get_weekly_expiry()
                 option_chain = ticker.option_chain(expiry)
             
             if signal_type == 'LONG':
@@ -138,34 +142,34 @@ class OptionsSelector:
                 contracts = option_chain.puts
                 option_type = 'PUT'
             
-            # Filter for liquid contracts
+            # Filter for liquid contracts (SPY typically has excellent liquidity)
             contracts = contracts[
-                (contracts['volume'] >= 100) & 
-                (contracts['openInterest'] >= 100) &
-                (contracts['bid'] > 0) &
-                (contracts['ask'] > contracts['bid'])
+                (contracts['volume'] >= self.config["options"]["min_volume"]) & 
+                (contracts['bid'] > 0) & 
+                (contracts['ask'] > 0) &
+                (contracts['openInterest'] >= self.config["options"]["min_open_interest"])
             ].copy()
             
             if contracts.empty:
-                logger.warning(f"No liquid contracts found for {symbol}")
+                logger.warning("No liquid contracts found for SPY")
                 return None
             
-            days_to_expiry = (datetime.strptime(expiry, '%Y-%m-%d') - datetime.now()).days + 1
-            T = max(days_to_expiry / 365.0, 1/365)  # Minimum 1 day
+            days_to_expiry = max(1, (datetime.strptime(expiry, '%Y-%m-%d') - datetime.now()).days + 1)
+            T = days_to_expiry / 365.0
             
-            best_contract = None
-            best_delta_diff = float('inf')
+            # Calculate delta for each contract and find best match
+            candidates = []
             
             for idx, row in contracts.iterrows():
                 strike = row['strike']
                 bid = row['bid']
                 ask = row['ask']
                 mid_price = (bid + ask) / 2
-                implied_vol = row.get('impliedVolatility', 0.3)
+                implied_vol = row.get('impliedVolatility', 0.20)  # SPY typically ~20% IV
                 
-                # Skip if spread is too wide
+                # Skip if spread is too wide (rare for SPY)
                 spread_pct = (ask - bid) / mid_price if mid_price > 0 else 1
-                if spread_pct > 0.10:  # 10% max spread for SPY
+                if spread_pct > self.config["options"]["max_spread_pct"]:
                     continue
                 
                 greeks = self.calculate_greeks(
@@ -180,100 +184,94 @@ class OptionsSelector:
                 delta = abs(greeks['delta'])
                 delta_diff = abs(delta - self.target_delta)
                 
-                # Prefer contracts closer to target delta
-                if delta_diff < best_delta_diff and delta_diff <= self.delta_tolerance:
-                    best_delta_diff = delta_diff
-                    best_contract = {
+                if delta_diff <= self.delta_tolerance:
+                    candidates.append({
                         'symbol': symbol,
                         'contract_symbol': row['contractSymbol'],
                         'strike': strike,
                         'expiry': expiry,
                         'option_type': option_type,
-                        'bid': round(bid, 2),
-                        'ask': round(ask, 2),
-                        'mid_price': round(mid_price, 2),
-                        'last': round(row.get('lastPrice', mid_price), 2),
+                        'bid': bid,
+                        'ask': ask,
+                        'mid_price': mid_price,
+                        'last': row.get('lastPrice', mid_price),
                         'volume': row['volume'],
                         'open_interest': row['openInterest'],
-                        'implied_volatility': round(implied_vol, 3),
+                        'implied_volatility': implied_vol,
                         'greeks': greeks,
                         'days_to_expiry': days_to_expiry,
-                        'spread': round(ask - bid, 2),
-                        'spread_pct': round(spread_pct * 100, 2),
-                        'risk_free_rate': round(r, 4)
-                    }
+                        'delta_diff': delta_diff,
+                        'spread_pct': spread_pct,
+                        'liquidity_score': self._calculate_liquidity_score(row),
+                        'risk_free_rate': r
+                    })
             
-            if best_contract:
-                logger.info(f"Selected {option_type} strike {best_contract['strike']} "
-                          f"with delta {best_contract['greeks']['delta']:.3f}")
+            if not candidates:
+                logger.warning(f"No contracts found within delta tolerance for SPY")
+                return None
+            
+            # Select best contract - for SPY prioritize tightest spread
+            candidates.sort(key=lambda x: (
+                x['spread_pct'],      # Tightest spread first
+                x['delta_diff'],      # Closest to target delta
+                -x['volume']          # Highest volume
+            ))
+            
+            best_contract = candidates[0]
+            
+            logger.info(f"Selected SPY {option_type}: Strike=${best_contract['strike']}, "
+                       f"Delta={abs(best_contract['greeks']['delta']):.3f}, "
+                       f"IV={best_contract['implied_volatility']:.3f}, "
+                       f"Days to expiry={best_contract['days_to_expiry']}, "
+                       f"Risk-free rate={r:.3f}")
             
             return best_contract
             
         except Exception as e:
-            logger.error(f"Error selecting option for {symbol}: {e}")
+            logger.error(f"Error selecting SPY option: {e}")
             return None
     
+    def _calculate_liquidity_score(self, contract_row: pd.Series) -> float:
+        """Calculate a liquidity score for SPY option contract"""
+        volume = contract_row.get('volume', 0)
+        open_interest = contract_row.get('openInterest', 0)
+        bid = contract_row.get('bid', 0)
+        ask = contract_row.get('ask', 0)
+        
+        # SPY typically has excellent liquidity, so we can be more stringent
+        volume_score = min(volume / 1000, 10)  # Max 10 points
+        oi_score = min(open_interest / 5000, 10)  # Max 10 points
+        
+        # Tighter spread = better liquidity
+        if ask > 0 and bid > 0:
+            spread_pct = (ask - bid) / ((ask + bid) / 2)
+            # SPY typically has very tight spreads
+            spread_score = max(0, 10 - (spread_pct * 200))  # More sensitive to spread
+        else:
+            spread_score = 0
+        
+        # Combined score (0-30)
+        return volume_score + oi_score + spread_score
+    
     def validate_contract_liquidity(self, contract: Dict) -> bool:
-        """Validate contract has sufficient liquidity for SPY"""
-        # SPY specific liquidity requirements (higher than general stocks)
-        min_volume = 500
-        min_oi = 1000
-        max_spread_pct = 0.05  # 5% max spread for SPY
-        
-        if contract['volume'] < min_volume:
-            logger.warning(f"Volume too low: {contract['volume']} < {min_volume}")
+        """Validate SPY contract has sufficient liquidity"""
+        # SPY-specific higher thresholds
+        if contract['volume'] < self.config["options"]["min_volume"]:
+            logger.warning(f"SPY contract has low volume: {contract['volume']}")
             return False
         
-        if contract['open_interest'] < min_oi:
-            logger.warning(f"Open interest too low: {contract['open_interest']} < {min_oi}")
+        if contract['open_interest'] < self.config["options"]["min_open_interest"]:
+            logger.warning(f"SPY contract has low OI: {contract['open_interest']}")
             return False
         
-        spread_pct = contract.get('spread_pct', 100) / 100
-        if spread_pct > max_spread_pct:
-            logger.warning(f"Spread too wide: {spread_pct:.2%} > {max_spread_pct:.2%}")
+        # Maximum spread threshold
+        if contract.get('spread_pct', 1) > self.config["options"]["max_spread_pct"]:
+            logger.warning(f"SPY contract has wide spread: {contract.get('spread_pct', 0):.2%}")
+            return False
+        
+        # Liquidity score threshold
+        if contract.get('liquidity_score', 0) < self.config["options"]["min_liquidity_score"]:
+            logger.warning(f"SPY contract has low liquidity score: {contract.get('liquidity_score', 0)}")
             return False
         
         return True
-    
-    def get_portfolio_greeks(self, positions: List[Dict], current_prices: Dict) -> Dict:
-        """Calculate aggregate portfolio Greeks for risk monitoring"""
-        total_delta = 0
-        total_gamma = 0
-        total_theta = 0
-        total_vega = 0
-        
-        r = self.get_risk_free_rate()
-        
-        for pos in positions:
-            if pos['status'] != 'OPEN':
-                continue
-                
-            symbol = pos['symbol']
-            current_price = current_prices.get(symbol, pos['entry_price'])
-            
-            days_to_expiry = (datetime.strptime(pos['expiry'], '%Y-%m-%d') - datetime.now()).days + 1
-            T = max(days_to_expiry / 365.0, 1/365)
-            
-            greeks = self.calculate_greeks(
-                S=current_price,
-                K=pos['strike'],
-                T=T,
-                r=r,
-                sigma=pos.get('implied_volatility', 0.3),
-                option_type=pos['option_type']
-            )
-            
-            # Scale by position size and contract multiplier
-            position_multiplier = pos['contracts'] * 100
-            total_delta += greeks['delta'] * position_multiplier
-            total_gamma += greeks['gamma'] * position_multiplier
-            total_theta += greeks['theta'] * position_multiplier
-            total_vega += greeks['vega'] * position_multiplier
-        
-        return {
-            'total_delta': round(total_delta, 2),
-            'total_gamma': round(total_gamma, 2),
-            'total_theta': round(total_theta, 2),
-            'total_vega': round(total_vega, 2),
-            'delta_dollars': round(total_delta * current_prices.get('SPY', 500), 2)
-        }

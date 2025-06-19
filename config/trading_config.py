@@ -3,7 +3,7 @@ import pytz
 
 TRADING_CONFIG = {
     "universe": {
-        "base_symbols": ["SPY"],  # Simplified to SPY only
+        "base_symbols": ["SPY"],  # SPY only trading
         "pre_market_gap_threshold": 0.0075,
         "min_market_cap": 5_000_000_000,
         "min_avg_option_volume": 10_000,
@@ -33,7 +33,11 @@ TRADING_CONFIG = {
     "options": {
         "target_delta": 0.40,
         "delta_tolerance": 0.05,
-        "use_weekly": True
+        "use_weekly": True,
+        "min_volume": 100,
+        "min_open_interest": 500,
+        "max_spread_pct": 0.10,  # Tighter spread for SPY
+        "min_liquidity_score": 15  # Higher liquidity requirement for SPY
     },
     
     "risk_management": {

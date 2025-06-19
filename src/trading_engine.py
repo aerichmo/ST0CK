@@ -45,286 +45,372 @@ class TradingEngine:
         self.active_window_start = config["session"]["active_start"]
         self.active_window_end = config["session"]["active_end"]
         
-        self.universe = []
+        # SPY-only trading
+        self.universe = ['SPY']
         self.opening_ranges = {}
         self.running = False
         self.last_bar_time = {}
         
+        logger.info("Trading Engine initialized for SPY-only trading")
+        
     def initialize_session(self):
         """Initialize daily trading session"""
-        logger.info("Initializing trading session")
+        logger.info("Initializing SPY trading session")
         
+        # Reset daily risk management stats
         self.risk_manager.reset_daily_stats()
         
-        self.universe = self.config["universe"]["base_symbols"].copy()
-        
-        gappers = self.market_data.get_pre_market_gappers()
-        self.universe.extend(gappers)
+        # SPY only - no additional symbols
+        self.universe = ['SPY']
         
         logger.info(f"Trading universe: {self.universe}")
         
+        # Connect to broker
         self.broker.connect()
         
+        # Calculate opening range for SPY
         self.calculate_opening_ranges()
         
     def calculate_opening_ranges(self):
-        """Calculate opening range for all symbols"""
+        """Calculate opening range for SPY"""
         current_date = datetime.now(self.timezone)
         
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            results = executor.map(
-                lambda symbol: (symbol, self.market_data.get_opening_range(symbol, current_date)),
-                self.universe
-            )
-            
-            for symbol, (orh, orl) in results:
-                if orh and orl:
-                    self.opening_ranges[symbol] = {'high': orh, 'low': orl}
-                    logger.info(f"{symbol} Opening Range: H={orh:.2f}, L={orl:.2f}")
+        symbol = 'SPY'
+        orh, orl = self.market_data.get_opening_range(symbol, current_date)
+        
+        if orh and orl:
+            self.opening_ranges[symbol] = {'high': orh, 'low': orl}
+            logger.info(f"SPY Opening Range: H={orh:.2f}, L={orl:.2f}")
+        else:
+            logger.error("Failed to calculate SPY opening range")
     
     def scan_for_signals(self):
-        """Main scanning loop for entry signals"""
+        """Main scanning loop for SPY entry signals"""
         current_time = datetime.now(self.timezone).time()
         
+        # Check if within active trading window
         if not (self.active_window_start <= current_time <= self.active_window_end):
             return
         
+        # Check if trading is allowed by risk manager
         allowed, reason = self.risk_manager.check_trade_allowed()
         if not allowed:
             logger.warning(f"Trading disabled: {reason}")
             return
         
-        for symbol in self.universe:
-            try:
-                if symbol not in self.opening_ranges:
-                    continue
-                
-                bars = self.market_data.get_5min_bars(symbol, lookback_days=1)
-                
-                if bars.empty:
-                    continue
-                
-                last_bar_time = bars.index[-1]
-                if symbol in self.last_bar_time and self.last_bar_time[symbol] == last_bar_time:
-                    continue
-                
-                self.last_bar_time[symbol] = last_bar_time
-                
-                if not self.trend_filter.validate_market_conditions(bars):
-                    continue
-                
-                trend_bias = self.trend_filter.get_trend_bias(bars)
-                if not trend_bias:
-                    continue
-                
-                or_data = self.opening_ranges[symbol]
-                signal = self.trend_filter.check_entry_trigger(
-                    bars, or_data['high'], or_data['low'], trend_bias
-                )
-                
-                if signal:
-                    self.process_signal(symbol, signal, bars)
-                    
-            except Exception as e:
-                logger.error(f"Error scanning {symbol}: {e}")
-    
-    def process_signal(self, symbol: str, signal: Dict, bars):
-        """Process trading signal and execute trade"""
-        logger.info(f"Signal detected for {symbol}: {signal['type']}")
+        # Only scan SPY
+        symbol = 'SPY'
         
-        current_quote = self.market_data.get_current_quote(symbol)
-        if not current_quote:
+        try:
+            if symbol not in self.opening_ranges:
+                logger.warning("SPY opening range not available")
+                return
+            
+            # Get current market data
+            current_data = self.market_data.get_5min_bars(symbol, lookback_days=2)
+            if current_data.empty:
+                return
+            
+            latest_bar = current_data.iloc[-1]
+            bar_time = latest_bar.name
+            
+            # Skip if we already processed this bar
+            if symbol in self.last_bar_time and self.last_bar_time[symbol] >= bar_time:
+                return
+            
+            self.last_bar_time[symbol] = bar_time
+            
+            # Check for breakout signals
+            signal = self.trend_filter.check_breakout(
+                symbol,
+                latest_bar,
+                self.opening_ranges[symbol]
+            )
+            
+            if signal:
+                logger.info(f"SPY Signal detected: {signal}")
+                self.process_signal(symbol, signal, latest_bar)
+            
+        except Exception as e:
+            logger.error(f"Error scanning SPY: {e}")
+    
+    def process_signal(self, symbol: str, signal: Dict, latest_bar):
+        """Process SPY trading signal"""
+        # Enforce SPY-only
+        if symbol != 'SPY':
+            logger.warning(f"Rejecting non-SPY signal for {symbol}")
+            return
+            
+        # Get current price
+        quote = self.market_data.get_current_quote(symbol)
+        if not quote or quote['price'] <= 0:
+            logger.error("Failed to get SPY quote")
             return
         
+        current_price = quote['price']
+        
+        # Select option contract
         contract = self.options_selector.select_option_contract(
-            symbol, signal['type'], current_quote['price']
+            symbol,
+            signal['type'],
+            current_price
         )
         
         if not contract:
-            logger.warning(f"No suitable option contract found for {symbol}")
+            logger.warning("No suitable SPY option contract found")
             return
         
+        # Validate liquidity
         if not self.options_selector.validate_contract_liquidity(contract):
-            logger.warning(f"Contract liquidity check failed for {symbol}")
+            logger.warning("SPY contract failed liquidity validation")
             return
         
-        position_size = self.risk_manager.calculate_position_size(contract['mid_price'])
+        # Get option quote
+        option_quote = self.broker.get_option_quote(contract['contract_symbol'])
+        if not option_quote:
+            logger.error("Failed to get SPY option quote")
+            return
         
+        # Calculate position size
+        position_size = self.risk_manager.calculate_position_size(
+            option_quote['ask'],
+            signal['stop_level']
+        )
+        
+        if position_size <= 0:
+            logger.warning("Position size too small for SPY")
+            return
+        
+        # Place entry order
+        order_id = self.broker.place_option_order(
+            contract,
+            position_size,
+            'MARKET'
+        )
+        
+        if not order_id:
+            logger.error("Failed to place SPY option order")
+            return
+        
+        # Create position record
         position = {
             'position_id': str(uuid.uuid4()),
             'symbol': symbol,
-            'contract_symbol': contract['contract_symbol'],
-            'option_type': contract['option_type'],
-            'entry_price': contract['mid_price'],
             'contracts': position_size,
-            'signal': signal
+            'entry_price': option_quote['ask'],
+            'entry_time': datetime.now(self.timezone),
+            'order_id': order_id
         }
         
-        if not self.risk_manager.add_position(position):
-            return
+        # Calculate exit levels
+        exit_levels = self.exit_manager.calculate_exit_levels(
+            option_quote['ask'],
+            signal['stop_level'],
+            signal['type']
+        )
         
-        order_id = self.broker.place_option_order(contract, position_size)
+        # Place OCO exit orders
+        oco_id = self.broker.place_oco_order(
+            contract,
+            position_size,
+            exit_levels['stop_loss'],
+            [exit_levels['target_1'], exit_levels['target_2']]
+        )
         
-        if order_id:
-            position['order_id'] = order_id
-            
-            oco_order = self.exit_manager.create_oco_order(position)
-            exit_levels = self.exit_manager.calculate_exit_levels(
-                contract['mid_price'], contract['option_type']
-            )
-            
-            oco_id = self.broker.place_oco_order(
-                contract, position_size, 
-                oco_order['orders']['stop_loss']['price'],
-                [oco_order['orders']['target_1']['price'], 
-                 oco_order['orders']['target_2']['price']]
-            )
-            
-            position['oco_id'] = oco_id
-            
-            self.db.log_trade_entry(position, signal, contract, exit_levels)
-            
-            logger.info(f"Trade executed: {position['position_id']} - "
-                       f"{position_size} {contract['option_type']}s at ${contract['mid_price']}")
+        position['oco_id'] = oco_id
+        
+        # Track position
+        self.risk_manager.add_position(position)
+        
+        # Log to database
+        self.db.log_trade_entry(position, signal, contract, exit_levels)
+        
+        logger.info(f"SPY position opened: {position['position_id']}")
+        
+        # Send notification
+        self.send_trade_notification('ENTRY', position, signal, contract)
     
     def monitor_positions(self):
-        """Monitor open positions for exit conditions"""
-        for position_id, position in self.risk_manager.active_positions.items():
-            if position['status'] != 'OPEN':
-                continue
-            
+        """Monitor open SPY positions"""
+        positions = self.risk_manager.get_open_positions()
+        
+        for position in positions:
             try:
+                # Time stop check
+                if self.exit_manager.check_time_stop(position['entry_time']):
+                    logger.info(f"Time stop triggered for SPY position {position['position_id']}")
+                    self.close_position(position, 'TIME_STOP')
+                    continue
+                
+                # Get current option quote
                 quote = self.broker.get_option_quote(position['contract_symbol'])
                 if not quote:
                     continue
                 
-                current_price = quote['last']
-                
-                self.risk_manager.update_position_pnl(position_id, current_price)
-                
-                exit_triggers = self.exit_manager.check_exit_conditions(
-                    position_id, current_price
+                # Update P&L
+                pnl = self.risk_manager.calculate_pnl(
+                    position['entry_price'],
+                    quote['bid'],
+                    position['contracts']
                 )
                 
-                for trigger in exit_triggers:
-                    self.execute_exit(trigger)
-                    
+                position['unrealized_pnl'] = pnl
+                position['current_price'] = quote['bid']
+                
+                # Log current status
+                logger.debug(f"SPY Position {position['position_id']}: "
+                           f"Entry=${position['entry_price']:.2f}, "
+                           f"Current=${quote['bid']:.2f}, "
+                           f"P&L=${pnl:.2f}")
+                
             except Exception as e:
-                logger.error(f"Error monitoring position {position_id}: {e}")
-        
-        time_stop_positions = self.risk_manager.check_time_stops()
-        for position_id in time_stop_positions:
-            quote = self.broker.get_option_quote(
-                self.risk_manager.active_positions[position_id]['contract_symbol']
-            )
-            if quote:
-                self.execute_exit({
-                    'position_id': position_id,
-                    'order_type': 'time_stop',
-                    'exit_price': quote['last'],
-                    'contracts': self.risk_manager.active_positions[position_id]['remaining_contracts'],
-                    'reason': 'Time stop (60 min)'
-                })
+                logger.error(f"Error monitoring SPY position {position['position_id']}: {e}")
     
-    def execute_exit(self, exit_trigger: Dict):
-        """Execute position exit"""
-        position_id = exit_trigger['position_id']
-        exit_price = exit_trigger['exit_price']
-        contracts = exit_trigger['contracts']
-        reason = exit_trigger['reason']
-        
-        result = self.risk_manager.close_position(position_id, exit_price, contracts)
-        
-        if result:
+    def close_position(self, position: Dict, reason: str):
+        """Close SPY position"""
+        try:
+            # Get current quote for exit price
+            quote = self.broker.get_option_quote(position['contract_symbol'])
+            if not quote:
+                logger.error(f"Failed to get quote for closing SPY position")
+                return
+            
+            exit_price = quote['bid']
+            
+            # Cancel OCO orders
+            if 'oco_id' in position:
+                self.broker.cancel_order(position['oco_id'])
+            
+            # Place market sell order
+            self.broker.simulate_fill(
+                position['order_id'],
+                exit_price
+            )
+            
+            # Calculate final P&L
+            pnl = self.risk_manager.calculate_pnl(
+                position['entry_price'],
+                exit_price,
+                position['contracts']
+            )
+            
+            # Update risk manager
+            self.risk_manager.remove_position(position['position_id'])
+            self.risk_manager.update_daily_pnl(pnl)
+            
+            # Log to database
             self.db.log_trade_exit(
-                position_id, exit_price, contracts, 
-                reason, result['trade_pnl']
+                position['position_id'],
+                exit_price,
+                position['contracts'],
+                reason,
+                pnl
             )
             
-            logger.info(f"Position exit: {position_id} - {contracts} contracts at "
-                       f"${exit_price} ({reason}) - P&L: ${result['trade_pnl']:.2f}")
+            logger.info(f"SPY position closed: {position['position_id']}, "
+                       f"Reason: {reason}, P&L: ${pnl:.2f}")
             
-            self.db.log_risk_metrics(self.risk_manager.get_risk_metrics())
+            # Send notification
+            self.send_trade_notification('EXIT', position, reason, pnl)
+            
+        except Exception as e:
+            logger.error(f"Error closing SPY position: {e}")
     
-    def end_of_day_tasks(self):
-        """Perform end of day tasks"""
-        logger.info("Running end of day tasks")
-        
-        for position_id in list(self.risk_manager.active_positions.keys()):
-            position = self.risk_manager.active_positions[position_id]
-            if position['status'] == 'OPEN':
-                quote = self.broker.get_option_quote(position['contract_symbol'])
-                if quote:
-                    self.execute_exit({
-                        'position_id': position_id,
-                        'order_type': 'eod',
-                        'exit_price': quote['last'],
-                        'contracts': position['remaining_contracts'],
-                        'reason': 'End of day'
-                    })
-        
-        expectancy_report = self.db.get_expectancy_report(days=30)
-        logger.info(f"Expectancy Report: {json.dumps(expectancy_report, indent=2)}")
-        
-        risk_metrics = self.risk_manager.get_risk_metrics()
-        logger.info(f"Daily Risk Metrics: {json.dumps(risk_metrics, indent=2)}")
-        
-        self.broker.disconnect()
-        self.db.close()
+    def send_trade_notification(self, action: str, position: Dict, *args):
+        """Send trade notification"""
+        try:
+            message = f"SPY {action}: {position['contracts']} contracts @ ${position['entry_price']:.2f}"
+            if action == 'EXIT' and len(args) >= 2:
+                reason, pnl = args[0], args[1]
+                message += f" | Reason: {reason} | P&L: ${pnl:.2f}"
+            
+            logger.info(f"NOTIFICATION: {message}")
+            # In production, this would send actual notifications
+            
+        except Exception as e:
+            logger.error(f"Error sending notification: {e}")
     
-    def run(self):
+    def run_trading_loop(self):
         """Main trading loop"""
+        logger.info("Starting SPY trading loop")
         self.running = True
         
-        # Check if we should run initialization immediately
-        current_time = datetime.now(self.timezone)
-        market_open = current_time.replace(hour=9, minute=25, second=0)
-        market_close = current_time.replace(hour=16, minute=0, second=0)
+        # Schedule tasks
+        schedule.every(30).seconds.do(self.scan_for_signals)
+        schedule.every(10).seconds.do(self.monitor_positions)
+        schedule.every(60).seconds.do(self.risk_manager.log_current_state)
         
-        # If started between 9:25 AM and 4:00 PM ET on a weekday, initialize immediately
-        if (current_time.weekday() < 5 and 
-            market_open <= current_time <= market_close):
-            logger.info("Market hours detected, initializing session immediately")
-            self.initialize_session()
-        
-        # Schedule daily tasks
+        # Schedule session management
         schedule.every().day.at("09:25").do(self.initialize_session)
-        schedule.every().day.at("16:00").do(self.end_of_day_tasks)
-        
-        # Only schedule scanning during active window
-        def conditional_scan():
-            current = datetime.now(self.timezone).time()
-            if self.active_window_start <= current <= self.active_window_end:
-                self.scan_for_signals()
-        
-        def conditional_monitor():
-            current = datetime.now(self.timezone).time()
-            market_close_time = dt_time(16, 0)
-            if current <= market_close_time:
-                self.monitor_positions()
-        
-        schedule.every(5).seconds.do(conditional_scan)
-        schedule.every(5).seconds.do(conditional_monitor)
-        
-        logger.info("Trading engine started - will run autonomously")
+        schedule.every().day.at("16:05").do(self.end_session)
         
         while self.running:
             try:
                 schedule.run_pending()
                 time.sleep(1)
-                
-                # Auto-shutdown after market close
-                if datetime.now(self.timezone).time() > dt_time(16, 5):
-                    logger.info("After market hours - shutting down")
-                    self.running = False
-                    
             except KeyboardInterrupt:
-                logger.info("Shutting down trading engine")
-                self.running = False
-                self.end_of_day_tasks()
+                logger.info("Trading loop interrupted by user")
+                break
             except Exception as e:
-                logger.error(f"Unexpected error in main loop: {e}")
+                logger.error(f"Error in trading loop: {e}")
+                time.sleep(5)
+    
+    def end_session(self):
+        """End of day cleanup"""
+        logger.info("Ending SPY trading session")
+        
+        # Close any remaining positions
+        positions = self.risk_manager.get_open_positions()
+        for position in positions:
+            self.close_position(position, 'END_OF_DAY')
+        
+        # Generate daily report
+        self.generate_daily_report()
+        
+        # Disconnect from broker
+        self.broker.disconnect()
+        
+        # Force database flush
+        if hasattr(self.db, 'force_flush'):
+            self.db.force_flush()
+    
+    def generate_daily_report(self):
+        """Generate daily SPY trading report"""
+        try:
+            account_info = self.broker.get_account_info()
+            daily_trades = self.db.get_daily_trades(datetime.now(self.timezone))
+            
+            report = {
+                'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
+                'symbol': 'SPY',
+                'trades': len(daily_trades),
+                'final_equity': account_info['account_value'],
+                'daily_pnl': account_info['realized_pnl'],
+                'commission_paid': account_info.get('commission_paid', 0)
+            }
+            
+            logger.info(f"Daily Report: {json.dumps(report, indent=2)}")
+            
+            # Save report to database
+            self.db.log_risk_metrics({
+                'current_equity': report['final_equity'],
+                'daily_pnl': report['daily_pnl'],
+                'daily_pnl_pct': report['daily_pnl'] / 100000,  # Assuming 100k initial
+                'consecutive_losses': self.risk_manager.consecutive_losses,
+                'active_positions': 0,
+                'trades_today': report['trades'],
+                'trading_enabled': True
+            })
+            
+        except Exception as e:
+            logger.error(f"Error generating daily report: {e}")
     
     def stop(self):
         """Stop trading engine"""
+        logger.info("Stopping SPY trading engine")
         self.running = False
+        self.end_session()
+        
+        # Close database connection
+        if hasattr(self.db, 'close'):
+            self.db.close()
