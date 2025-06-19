@@ -3,11 +3,11 @@ import pytz
 
 TRADING_CONFIG = {
     "universe": {
-        "base_symbols": ["SPY", "QQQ"],
+        "base_symbols": ["SPY"],  # Simplified to SPY only
         "pre_market_gap_threshold": 0.0075,
         "min_market_cap": 5_000_000_000,
         "min_avg_option_volume": 10_000,
-        "max_additional_symbols": 5
+        "max_additional_symbols": 0  # No additional symbols
     },
     
     "session": {
@@ -40,7 +40,7 @@ TRADING_CONFIG = {
         "position_risk_pct": 0.10,
         "daily_loss_limit_pct": 0.20,
         "consecutive_loss_limit": 2,
-        "max_positions": 5
+        "max_positions": 1  # Single position for SPY focus
     },
     
     "exit_strategy": {
