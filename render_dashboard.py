@@ -48,14 +48,15 @@ def main():
         
         # Initialize market data provider
         try:
-            # Try MCP first if credentials are available
-            if os.environ.get('ALPACA_API_KEY'):
-                logger.info("Using MCP market data provider")
-                market_data = MCPMarketDataProvider()
+            # Try Alpaca first if credentials are available
+            if os.environ.get('ALPACA_API_KEY') and os.environ.get('ALPACA_API_SECRET'):
+                logger.info("Using Alpaca market data provider")
+                from src.alpaca_market_data import AlpacaMarketDataProvider
+                market_data = AlpacaMarketDataProvider()
             else:
                 raise Exception("No Alpaca credentials")
         except Exception as e:
-            logger.info("Falling back to Yahoo Finance market data provider")
+            logger.info(f"Falling back to Yahoo Finance market data provider: {e}")
             market_data = MarketDataProvider(TRADING_CONFIG)
         
         # Initialize dashboard without live engine
