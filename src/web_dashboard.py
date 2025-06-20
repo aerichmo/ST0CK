@@ -4,7 +4,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
+import pytz
 import threading
 import queue
 import logging
@@ -42,11 +43,38 @@ class TradingDashboard:
         self.opening_range = None
         self.account_info = {}
         
+        # Trading time windows (ET)
+        self.et_timezone = pytz.timezone('US/Eastern')
+        self.market_open = time(9, 30)
+        self.opening_range_end = time(9, 40)
+        self.active_trading_end = time(10, 30)
+        self.session_end = time(16, 5)
+        
         # Setup layout
         self._setup_layout()
         
         # Setup callbacks
         self._setup_callbacks()
+        
+    def _is_active_trading_time(self):
+        """Check if current time is within active trading window."""
+        now_et = datetime.now(self.et_timezone).time()
+        
+        # Check if it's a weekday
+        if datetime.now(self.et_timezone).weekday() >= 5:  # Saturday = 5, Sunday = 6
+            return False, "Weekend - Market Closed"
+        
+        # Check time windows
+        if now_et < self.market_open:
+            return False, "Pre-Market - Trading starts at 9:30 AM ET"
+        elif now_et < self.opening_range_end:
+            return True, "Opening Range Period (9:30-9:40 AM ET)"
+        elif now_et <= self.active_trading_end:
+            return True, "Active Trading Window (9:40-10:30 AM ET)"
+        elif now_et <= self.session_end:
+            return True, "Position Monitoring Only (No New Trades)"
+        else:
+            return False, "After Hours - Market Closed"
         
     def _setup_layout(self):
         """Create the dashboard layout."""
@@ -149,12 +177,25 @@ class TradingDashboard:
             [Output('candlestick-chart', 'figure'),
              Output('account-info', 'children'),
              Output('position-info', 'children'),
-             Output('trade-log', 'children')],
+             Output('trade-log', 'children'),
+             Output('trading-status', 'children')],
             [Input('interval-component', 'n_intervals')]
         )
         def update_dashboard(n):
-            # Update data
-            self._fetch_latest_data()
+            # Check if we should update
+            is_active, status_msg = self._is_active_trading_time()
+            
+            # Create status display
+            status_color = '#00ff00' if is_active else '#ff0000'
+            current_time = datetime.now(self.et_timezone).strftime('%I:%M:%S %p ET')
+            status_html = [
+                html.P(status_msg, style={'color': status_color, 'fontWeight': 'bold'}),
+                html.P(f'Current Time: {current_time}', style={'color': '#fff'})
+            ]
+            
+            # Only fetch new data during active hours
+            if is_active:
+                self._fetch_latest_data()
             
             # Create candlestick chart
             fig = self._create_candlestick_chart()
@@ -168,14 +209,28 @@ class TradingDashboard:
             # Update trade log
             trade_log_html = self._format_trade_log()
             
-            return fig, account_html, position_html, trade_log_html
+            return fig, account_html, position_html, trade_log_html, status_html
             
     def _fetch_latest_data(self):
         """Fetch the latest market and trading data."""
         try:
-            # Get price data
-            end_time = datetime.now()
-            start_time = end_time - timedelta(hours=2)
+            # Get current time in ET
+            now_et = datetime.now(self.et_timezone)
+            
+            # Calculate time window for data fetch
+            # Show data from 9:25 AM to 10:35 AM ET (5 min buffer on each side)
+            today_925am = now_et.replace(hour=9, minute=25, second=0, microsecond=0)
+            today_1035am = now_et.replace(hour=10, minute=35, second=0, microsecond=0)
+            
+            # Determine time range
+            if now_et.time() < time(10, 35):
+                # Before 10:35 AM - show from 9:25 AM to now
+                start_time = today_925am
+                end_time = now_et
+            else:
+                # After 10:35 AM - show the complete trading window
+                start_time = today_925am
+                end_time = today_1035am
             
             bars = self.market_data.get_stock_bars(
                 'SPY',
@@ -321,9 +376,15 @@ class TradingDashboard:
                     )
                     
         # Update layout
+        is_active, status = self._is_active_trading_time()
+        title_color = '#00ff00' if is_active else '#ff0000'
+        
         fig.update_layout(
             template='plotly_dark',
-            title='SPY 5-Minute Candles with Opening Range Breakout',
+            title={
+                'text': f'SPY 5-Minute Candles | Opening Range: 9:30-9:40 ET | Active Trading: 9:40-10:30 ET<br><sub>{status}</sub>',
+                'font': {'color': title_color}
+            },
             yaxis_title='Price ($)',
             yaxis2_title='Volume',
             xaxis2_title='Time',

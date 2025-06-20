@@ -112,11 +112,18 @@ python visualize.py --mode web --live --port 8050
 
 ## Technical Details
 
+### Trading Time Windows
+- **Opening Range**: 9:30-9:40 AM ET (establishes high/low)
+- **Active Trading**: 9:40-10:30 AM ET (new trades allowed)
+- **Position Monitoring**: 10:30 AM-4:05 PM ET (exits only)
+- **Data Updates**: Only during market hours (9:30 AM-4:05 PM ET)
+
 ### Update Frequency
-- Chart updates: Every 5 seconds
+- Chart updates: Every 5 seconds during active hours
+- No updates on weekends or after hours
 - Trade markers: Real-time from database
 - Position info: Real-time from broker
-- Account data: Every 5 seconds
+- Account data: Every 5 seconds during market hours
 
 ### Data Sources
 - **MCP Mode**: Real-time Alpaca market data

@@ -62,12 +62,14 @@ Click "Create Web Service" and Render will:
 ## Features on Render
 
 ### What Works:
-- ✅ Real-time SPY candlestick charts
-- ✅ 5-minute candle updates
+- ✅ Real-time SPY candlestick charts (9:30 AM - 10:35 AM ET focus)
+- ✅ 5-minute candle updates during market hours only
 - ✅ Technical indicators (EMA 8/21)
-- ✅ Opening range visualization
+- ✅ Opening range visualization (9:30-9:40 AM ET)
+- ✅ Active trading window indicator (9:40-10:30 AM ET)
 - ✅ Volume analysis
 - ✅ View-only mode (no trading)
+- ✅ Smart status display showing current trading phase
 
 ### What's Different:
 - 📊 **View-only mode** - No live trading execution

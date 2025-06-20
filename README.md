@@ -22,11 +22,17 @@ ST0CK implements a systematic opening range breakout strategy on SPY with discip
 
 ## Trading Strategy
 
+### Trading Time Windows
+- **Opening Range**: 9:30-9:40 AM ET (10 minutes to establish range)
+- **Active Trading**: 9:40-10:30 AM ET (ONLY time new trades are placed)
+- **Position Management**: 10:30 AM-4:05 PM ET (monitor/exit only)
+
 ### Entry Criteria
-- Breakout above/below opening range (9:30-9:40 ET)
+- Breakout above/below opening range (established 9:30-9:40 ET)
 - ATR-based breakout confirmation (0.15x ATR threshold)
 - Volume surge confirmation (1.5x average)
 - EMA trend alignment (8/21 EMA)
+- **Trades ONLY placed between 9:40-10:30 AM ET**
 
 ### Exit Strategy
 - Stop Loss: -1R (100% of risk)
