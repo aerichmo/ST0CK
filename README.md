@@ -78,6 +78,7 @@ ST0CK implements a systematic opening range breakout strategy on SPY with discip
 - Python 3.8 or higher
 - PostgreSQL database (local or cloud)
 - Git
+- Alpaca API account (free paper trading account works)
 
 ### Local Setup
 

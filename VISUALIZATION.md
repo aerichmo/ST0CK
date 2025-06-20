@@ -126,9 +126,13 @@ python visualize.py --mode web --live --port 8050
 - Account data: Every 5 seconds during market hours
 
 ### Data Sources
-- **MCP Mode**: Real-time Alpaca market data
-- **Paper Mode**: Yahoo Finance (may have delays)
-- **Trade Data**: PostgreSQL database
+- **Market Data**: Real-time Alpaca API (required)
+- **Trade Data**: PostgreSQL database (optional)
+- **Update Intervals**:
+  - Active Trading (9:40-10:30 AM): Every 2 seconds
+  - Opening Range (9:30-9:40 AM): Every 3 seconds
+  - Position Monitoring: Every 10 seconds
+  - After Hours/Weekends: Every 30-60 seconds
 
 ### Performance
 - Web dashboard: ~50MB RAM

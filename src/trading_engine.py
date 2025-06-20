@@ -8,7 +8,7 @@ import uuid
 import json
 
 from config.trading_config import TRADING_CONFIG
-from src.market_data import MarketDataProvider
+from src.alpaca_market_data import AlpacaMarketDataProvider
 from src.trend_filter import TrendFilter
 from src.options_selector import OptionsSelector
 from src.risk_manager import RiskManager
@@ -16,7 +16,6 @@ from src.exit_manager import ExitManager
 from src.database import DatabaseManager
 from src.broker_interface import BrokerInterface
 from src.mcp_broker import MCPBroker
-from src.mcp_market_data import MCPMarketDataProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,13 +35,9 @@ class TradingEngine:
         self.broker = broker
         self.db = DatabaseManager(db_connection_string)
         
-        # Use MCP market data if using MCP broker
-        if isinstance(broker, MCPBroker):
-            self.market_data = MCPMarketDataProvider()
-            logger.info("Using MCP market data provider")
-        else:
-            self.market_data = MarketDataProvider(config)
-            logger.info("Using Yahoo Finance market data provider")
+        # Use Alpaca market data for all brokers
+        self.market_data = AlpacaMarketDataProvider()
+        logger.info("Using Alpaca market data provider")
             
         self.trend_filter = TrendFilter(config)
         self.options_selector = OptionsSelector(config)

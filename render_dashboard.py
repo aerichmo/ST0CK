@@ -13,8 +13,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.trading_config import TRADING_CONFIG
-from src.mcp_market_data import MCPMarketDataProvider
-from src.market_data import MarketDataProvider
+from src.alpaca_market_data import AlpacaMarketDataProvider
 from src.database import DatabaseManager
 from src.web_dashboard import TradingDashboard
 
@@ -46,18 +45,17 @@ def main():
             logger.warning(f"Database connection failed: {e}. Running without database.")
             db = None
         
-        # Initialize market data provider
+        # Initialize market data provider - Alpaca only
+        if not os.environ.get('ALPACA_API_KEY') or not os.environ.get('ALPACA_API_SECRET'):
+            logger.error("Alpaca API credentials are required. Please set ALPACA_API_KEY and ALPACA_API_SECRET environment variables.")
+            sys.exit(1)
+            
         try:
-            # Try Alpaca first if credentials are available
-            if os.environ.get('ALPACA_API_KEY') and os.environ.get('ALPACA_API_SECRET'):
-                logger.info("Using Alpaca market data provider")
-                from src.alpaca_market_data import AlpacaMarketDataProvider
-                market_data = AlpacaMarketDataProvider()
-            else:
-                raise Exception("No Alpaca credentials")
+            logger.info("Initializing Alpaca market data provider")
+            market_data = AlpacaMarketDataProvider()
         except Exception as e:
-            logger.info(f"Falling back to Yahoo Finance market data provider: {e}")
-            market_data = MarketDataProvider(TRADING_CONFIG)
+            logger.error(f"Failed to initialize Alpaca market data: {e}")
+            sys.exit(1)
         
         # Initialize dashboard without live engine
         dashboard = TradingDashboard(

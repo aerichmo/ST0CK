@@ -75,6 +75,31 @@ class TradingDashboard:
             return True, "Position Monitoring Only (No New Trades)"
         else:
             return False, "After Hours - Market Closed"
+            
+    def _get_optimal_interval(self):
+        """Get optimal update interval based on current trading phase."""
+        now_et = datetime.now(self.et_timezone)
+        current_time = now_et.time()
+        
+        # Weekend - very slow updates
+        if now_et.weekday() >= 5:
+            return 60000  # 60 seconds
+            
+        # Active trading window - fastest updates
+        if self.opening_range_end <= current_time <= self.active_trading_end:
+            return 2000  # 2 seconds during active trading
+            
+        # Opening range - fast updates
+        elif self.market_open <= current_time < self.opening_range_end:
+            return 3000  # 3 seconds during opening range
+            
+        # Position monitoring - moderate updates
+        elif self.active_trading_end < current_time <= self.session_end:
+            return 10000  # 10 seconds after active trading
+            
+        # Outside market hours - slow updates
+        else:
+            return 30000  # 30 seconds outside hours
         
     def _setup_layout(self):
         """Create the dashboard layout."""
@@ -140,12 +165,15 @@ class TradingDashboard:
                         config={'displayModeBar': False}
                     ),
                     
-                    # Update interval
+                    # Dynamic update interval
                     dcc.Interval(
                         id='interval-component',
-                        interval=5000,  # Update every 5 seconds
+                        interval=5000,  # Will be updated dynamically
                         n_intervals=0
-                    )
+                    ),
+                    
+                    # Store for dynamic interval management
+                    dcc.Store(id='interval-store', data={'interval': 5000})
                 ], style={'width': '60%', 'float': 'left', 'padding': '10px'}),
                 
                 # Right panel - Trade log
@@ -173,24 +201,38 @@ class TradingDashboard:
     def _setup_callbacks(self):
         """Setup Dash callbacks for real-time updates."""
         
+        # Update interval dynamically
+        @self.app.callback(
+            Output('interval-component', 'interval'),
+            [Input('interval-store', 'data')]
+        )
+        def update_interval(data):
+            return self._get_optimal_interval()
+        
         @self.app.callback(
             [Output('candlestick-chart', 'figure'),
              Output('account-info', 'children'),
              Output('position-info', 'children'),
              Output('trade-log', 'children'),
-             Output('trading-status', 'children')],
+             Output('trading-status', 'children'),
+             Output('interval-store', 'data')],
             [Input('interval-component', 'n_intervals')]
         )
         def update_dashboard(n):
             # Check if we should update
             is_active, status_msg = self._is_active_trading_time()
             
+            # Get current interval
+            current_interval = self._get_optimal_interval()
+            interval_seconds = current_interval / 1000
+            
             # Create status display
             status_color = '#00ff00' if is_active else '#ff0000'
             current_time = datetime.now(self.et_timezone).strftime('%I:%M:%S %p ET')
             status_html = [
                 html.P(status_msg, style={'color': status_color, 'fontWeight': 'bold'}),
-                html.P(f'Current Time: {current_time}', style={'color': '#fff'})
+                html.P(f'Current Time: {current_time}', style={'color': '#fff'}),
+                html.P(f'Updates: Every {interval_seconds}s', style={'color': '#888', 'fontSize': '12px'})
             ]
             
             # Only fetch new data during active hours
@@ -209,7 +251,7 @@ class TradingDashboard:
             # Update trade log
             trade_log_html = self._format_trade_log()
             
-            return fig, account_html, position_html, trade_log_html, status_html
+            return fig, account_html, position_html, trade_log_html, status_html, {'interval': current_interval}
             
     def _fetch_latest_data(self):
         """Fetch the latest market and trading data."""

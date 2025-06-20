@@ -14,8 +14,7 @@ import threading
 import time
 
 from config.trading_config import TRADING_CONFIG
-from src.mcp_market_data import MCPMarketDataProvider
-from src.market_data import MarketDataProvider
+from src.alpaca_market_data import AlpacaMarketDataProvider
 from src.database import DatabaseManager
 from src.candle_visualizer import CandleVisualizer
 from src.web_dashboard import TradingDashboard
@@ -53,13 +52,9 @@ def main():
         # Initialize database
         db = DatabaseManager(args.db)
         
-        # Initialize market data provider
-        if args.broker == 'mcp':
-            logger.info("Using MCP market data provider")
-            market_data = MCPMarketDataProvider()
-        else:
-            logger.info("Using Yahoo Finance market data provider")
-            market_data = MarketDataProvider(TRADING_CONFIG)
+        # Initialize market data provider - Alpaca only
+        logger.info("Using Alpaca market data provider")
+        market_data = AlpacaMarketDataProvider()
         
         # Initialize trading engine if live mode
         engine = None
