@@ -13,7 +13,7 @@ TRADING_CONFIG = {
     "session": {
         "timezone": pytz.timezone("US/Eastern"),
         "active_start": time(9, 40),
-        "active_end": time(10, 30),
+        "active_end": time(10, 30),  # Morning only
         "opening_range_start": time(9, 30),
         "opening_range_end": time(9, 40)
     },
@@ -41,18 +41,25 @@ TRADING_CONFIG = {
     },
     
     "risk_management": {
-        "position_risk_pct": 0.10,
-        "daily_loss_limit_pct": 0.20,
-        "consecutive_loss_limit": 2,
-        "max_positions": 1  # Single position for SPY focus
+        "position_risk_pct": 0.20,  # Antiles approach: 20% for small accounts
+        "daily_loss_limit_pct": 0.40,  # Allow 2 full losses
+        "consecutive_loss_limit": 3,  # Slightly more room
+        "max_positions": 1,  # Single position for SPY focus
+        "account_size_tiers": {  # Antiles-style account building
+            "micro": {"max": 5000, "risk_pct": 0.20},      # <$5k: 20% risk
+            "small": {"max": 10000, "risk_pct": 0.15},     # $5-10k: 15% risk
+            "medium": {"max": 25000, "risk_pct": 0.10},    # $10-25k: 10% risk
+            "large": {"max": 50000, "risk_pct": 0.05},     # $25-50k: 5% risk
+            "pro": {"max": float('inf'), "risk_pct": 0.03} # $50k+: 3% risk
+        }
     },
     
     "exit_strategy": {
         "stop_loss_r": -1.0,
-        "target_1_r": 1.5,
-        "target_1_size_pct": 0.5,
-        "target_2_r": 3.0,
-        "time_stop_minutes": 60
+        "target_1_r": 1.0,  # Antiles: Quick base hits
+        "target_1_size_pct": 0.75,  # Take most off the table
+        "target_2_r": 2.0,  # Reduced from 3.0 for day trading
+        "time_stop_minutes": 30  # Antiles: Quick in and out
     },
     
     "market_simulation": {

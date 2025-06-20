@@ -14,6 +14,7 @@ class RiskManager:
         self.daily_loss_limit_pct = config["risk_management"]["daily_loss_limit_pct"]
         self.consecutive_loss_limit = config["risk_management"]["consecutive_loss_limit"]
         self.max_positions = config["risk_management"]["max_positions"]
+        self.account_size_tiers = config["risk_management"]["account_size_tiers"]
         
         self.daily_pnl = 0.0
         self.consecutive_losses = 0
@@ -22,10 +23,22 @@ class RiskManager:
         self.trading_enabled = True
         self.timezone = config["session"]["timezone"]
         
+    def get_dynamic_risk_percentage(self) -> float:
+        """Get risk percentage based on account size (Antiles approach)"""
+        for tier_name, tier_info in self.account_size_tiers.items():
+            if self.current_equity <= tier_info["max"]:
+                logger.info(f"Account tier: {tier_name} (${self.current_equity:.0f}), Risk: {tier_info['risk_pct']*100:.0f}%")
+                return tier_info["risk_pct"]
+        
+        # Default to most conservative if somehow above all tiers
+        return 0.03
+    
     def calculate_position_size(self, option_price: float, stop_level: float, 
                               market_regime: Optional[Dict] = None) -> int:
-        """Dynamic position sizing based on market conditions"""
-        base_risk = self.current_equity * self.position_risk_pct
+        """Dynamic position sizing based on market conditions and account size"""
+        # Get dynamic risk percentage based on account size
+        dynamic_risk_pct = self.get_dynamic_risk_percentage()
+        base_risk = self.current_equity * dynamic_risk_pct
         
         # Default regime if not provided
         if market_regime is None:
@@ -67,8 +80,9 @@ class RiskManager:
         
         final_contracts = max(min_contracts, min(contracts, max_contracts))
         
-        logger.info(f"Position sizing: Base={base_risk:.0f}, Regime={regime_mult:.2f}, "
-                   f"Time={time_mult:.2f}, Loss={loss_mult:.2f}, Signal={signal_mult:.2f}, "
+        logger.info(f"Position sizing: Equity=${self.current_equity:.0f}, Risk%={dynamic_risk_pct*100:.0f}%, "
+                   f"Base=${base_risk:.0f}, Regime={regime_mult:.2f}, "
+                   f"Time={time_mult:.2f}, Loss={loss_mult:.2f}, "
                    f"Contracts={final_contracts}")
         
         return final_contracts
