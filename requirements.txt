@@ -19,3 +19,9 @@ requests>=2.31.0
 
 # Technical analysis
 ta>=0.10.2
+
+# Visualization
+matplotlib>=3.7.0
+mplfinance>=0.12.10
+plotly>=5.18.0
+dash>=2.14.0

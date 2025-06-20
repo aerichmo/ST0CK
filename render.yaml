@@ -1,0 +1,26 @@
+services:
+  # Web service for the trading dashboard
+  - type: web
+    name: st0ck-dashboard
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python render_dashboard.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        sync: false  # Add your PostgreSQL URL
+      - key: ALPACA_API_KEY
+        sync: false  # Add your Alpaca API key
+      - key: ALPACA_API_SECRET
+        sync: false  # Add your Alpaca API secret
+      - key: ALPACA_BASE_URL
+        value: https://paper-api.alpaca.markets
+    autoDeploy: false  # Set to true if you want auto-deploy from GitHub
+
+databases:
+  # Optional: PostgreSQL database for trade history
+  - name: st0ck-db
+    databaseName: st0ck_trading
+    user: st0ck_user
+    plan: free  # 256MB storage limit on free tier
