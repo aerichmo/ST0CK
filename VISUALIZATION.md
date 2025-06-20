@@ -138,6 +138,21 @@ python visualize.py --mode web --live --port 8050
 - Matplotlib viewer: ~100MB RAM
 - CPU usage: <5% during normal operation
 
+### Execution Timing (Improved)
+The trading engine now uses dynamic execution intervals:
+- **Pre-market & Active Trading (9:20-10:30 AM)**:
+  - Signal scanning: Every 1 second
+  - Position monitoring: Every 1 second  
+  - Maximum 1-second delay for breakout detection
+- **Position Monitoring (10:31 AM-4:05 PM)**:
+  - Signal scanning: Every 5 seconds
+  - Position monitoring: Every 2 seconds
+  - Faster exit management during market hours
+- **Idle Times**:
+  - Signal scanning: Every 30 seconds
+  - Position monitoring: Every 10 seconds
+  - Resource conservation when not actively trading
+
 ## Troubleshooting
 
 ### Dashboard Won't Start

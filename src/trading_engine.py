@@ -1,7 +1,7 @@
 import logging
 import schedule
 import time
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import pytz
 from typing import Dict, List, Optional
 import uuid
@@ -346,24 +346,86 @@ class TradingEngine:
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
     
-    def run_trading_loop(self):
-        """Main trading loop"""
-        logger.info("Starting SPY trading loop")
-        self.running = True
+    def _get_current_intervals(self):
+        """Get dynamic intervals based on current trading phase"""
+        current_time = datetime.now(self.timezone).time()
         
-        # Schedule tasks
-        schedule.every(30).seconds.do(self.scan_for_signals)
-        schedule.every(10).seconds.do(self.monitor_positions)
-        schedule.every(60).seconds.do(self.risk_manager.log_current_state)
+        # Pre-market and active trading (9:20-10:30 AM): Most reactive
+        if dt_time(9, 20) <= current_time <= self.active_window_end:
+            return {
+                'signal_scan': 1,  # 1-second scans during critical window
+                'position_monitor': 1,  # 1-second position checks
+                'risk_log': 30  # 30-second risk logging
+            }
+        # Position monitoring phase (10:31 AM-4:05 PM): Moderate reactivity
+        elif self.active_window_end < current_time <= dt_time(16, 5):
+            return {
+                'signal_scan': 5,  # 5-second scans (no new trades allowed anyway)
+                'position_monitor': 2,  # 2-second position checks for exits
+                'risk_log': 60  # 60-second risk logging
+            }
+        # All other times: Low reactivity
+        else:
+            return {
+                'signal_scan': 30,  # 30-second scans
+                'position_monitor': 10,  # 10-second position checks
+                'risk_log': 300  # 5-minute risk logging
+            }
+    
+    def run_trading_loop(self):
+        """Main trading loop with dynamic timing"""
+        logger.info("Starting SPY trading loop with dynamic timing")
+        self.running = True
         
         # Schedule session management
         schedule.every().day.at("09:25").do(self.initialize_session)
         schedule.every().day.at("16:05").do(self.end_session)
         
+        # Track last execution times
+        last_signal_scan = 0
+        last_position_monitor = 0
+        last_risk_log = 0
+        last_timing_mode = None
+        
         while self.running:
             try:
+                current_time = time.time()
+                intervals = self._get_current_intervals()
+                
+                # Log timing mode changes
+                current_mode = None
+                if intervals['signal_scan'] == 1:
+                    current_mode = "ACTIVE (1s scans)"
+                elif intervals['signal_scan'] == 5:
+                    current_mode = "MONITORING (5s scans)"
+                else:
+                    current_mode = "IDLE (30s scans)"
+                
+                if current_mode != last_timing_mode:
+                    logger.info(f"Execution timing changed to: {current_mode}")
+                    last_timing_mode = current_mode
+                
+                # Dynamic signal scanning
+                if current_time - last_signal_scan >= intervals['signal_scan']:
+                    self.scan_for_signals()
+                    last_signal_scan = current_time
+                
+                # Dynamic position monitoring
+                if current_time - last_position_monitor >= intervals['position_monitor']:
+                    self.monitor_positions()
+                    last_position_monitor = current_time
+                
+                # Dynamic risk logging
+                if current_time - last_risk_log >= intervals['risk_log']:
+                    self.risk_manager.log_current_state()
+                    last_risk_log = current_time
+                
+                # Run scheduled tasks (session management)
                 schedule.run_pending()
-                time.sleep(1)
+                
+                # Sleep for 100ms for better reactivity
+                time.sleep(0.1)
+                
             except KeyboardInterrupt:
                 logger.info("Trading loop interrupted by user")
                 break

@@ -78,6 +78,25 @@ TRADING_CONFIG = {
         "loss_threshold_dollars": -500
     },
     
+    "execution_timing": {
+        "pre_market_start": time(9, 20),
+        "active_intervals": {
+            "signal_scan": 1,
+            "position_monitor": 1,
+            "risk_log": 30
+        },
+        "monitoring_intervals": {
+            "signal_scan": 5,
+            "position_monitor": 2,
+            "risk_log": 60
+        },
+        "idle_intervals": {
+            "signal_scan": 30,
+            "position_monitor": 10,
+            "risk_log": 300
+        }
+    },
+    
     "cache": {
         "market_data_ttl": 60,
         "risk_free_rate_ttl": 3600
