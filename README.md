@@ -18,6 +18,7 @@ ST0CK implements a systematic opening range breakout strategy on SPY with discip
 - **Cloud-Ready**: Supports GitHub Actions, AWS, GCP, and other cloud platforms
 - **Database Integration**: PostgreSQL for trade logging and performance analytics
 - **Real-time Monitoring**: Webhook support for Discord/Slack notifications
+- **Alpaca MCP Integration**: Simplified API calls through Model Context Protocol server
 
 ## Trading Strategy
 
@@ -115,9 +116,19 @@ EOL
 
 ## Usage
 
-### Paper Trading Mode (Default)
+### Quick Start with Alpaca MCP (Default)
 ```bash
+# One-time setup
+./setup_mcp.sh
+
+# Run with default MCP broker
 python main.py --mode paper --capital 100000
+```
+
+### Using Built-in Paper Trading (Offline Testing)
+```bash
+# Use built-in paper broker for offline testing
+python main.py --broker paper --capital 100000
 ```
 
 ### With Custom Database
@@ -129,6 +140,7 @@ python main.py --mode paper --db "postgresql://user:pass@host:5432/dbname"
 - `--mode`: Trading mode (`paper` or `live`, default: `paper`)
 - `--capital`: Initial trading capital (default: `100000`)
 - `--db`: Database connection string (default: `postgresql://localhost/options_scalper`)
+- `--broker`: Broker implementation (`mcp` or `paper`, default: `mcp`)
 
 ## Configuration
 

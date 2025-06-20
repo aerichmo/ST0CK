@@ -14,7 +14,9 @@ from src.options_selector import OptionsSelector
 from src.risk_manager import RiskManager
 from src.exit_manager import ExitManager
 from src.database import DatabaseManager
-from src.broker_interface import PaperTradingBroker
+from src.broker_interface import BrokerInterface
+from src.mcp_broker import MCPBroker
+from src.mcp_market_data import MCPMarketDataProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,7 +36,14 @@ class TradingEngine:
         self.broker = broker
         self.db = DatabaseManager(db_connection_string)
         
-        self.market_data = MarketDataProvider(config)
+        # Use MCP market data if using MCP broker
+        if isinstance(broker, MCPBroker):
+            self.market_data = MCPMarketDataProvider()
+            logger.info("Using MCP market data provider")
+        else:
+            self.market_data = MarketDataProvider(config)
+            logger.info("Using Yahoo Finance market data provider")
+            
         self.trend_filter = TrendFilter(config)
         self.options_selector = OptionsSelector(config)
         self.risk_manager = RiskManager(config, initial_equity)
