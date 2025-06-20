@@ -40,6 +40,7 @@ class TradingEngine:
         logger.info("Using Alpaca market data provider")
             
         self.trend_filter = TrendFilter(config)
+        self.trend_filter.market_data = self.market_data  # Set market data reference
         self.options_selector = OptionsSelector(config)
         self.risk_manager = RiskManager(config, initial_equity)
         self.exit_manager = ExitManager(config)
@@ -76,13 +77,26 @@ class TradingEngine:
         
     def calculate_opening_ranges(self):
         """Calculate opening range for SPY"""
-        current_date = datetime.now(self.timezone)
+        current_date = datetime.now(self.timezone).date()
+        
+        # Create datetime objects for opening range window
+        or_start = datetime.combine(
+            current_date,
+            self.config["session"]["opening_range_start"],
+            self.timezone
+        )
+        or_end = datetime.combine(
+            current_date,
+            self.config["session"]["opening_range_end"],
+            self.timezone
+        )
         
         symbol = 'SPY'
-        orh, orl = self.market_data.get_opening_range(symbol, current_date)
+        orh, orl, or_volume = self.market_data.get_opening_range(symbol, or_start, or_end)
         
         if orh and orl:
             self.opening_ranges[symbol] = {'high': orh, 'low': orl}
+            self.trend_filter.opening_ranges = self.opening_ranges  # Share with trend filter
             logger.info(f"SPY Opening Range: H={orh:.2f}, L={orl:.2f}")
         else:
             logger.error("Failed to calculate SPY opening range")
@@ -123,7 +137,7 @@ class TradingEngine:
             
             self.last_bar_time[symbol] = bar_time
             
-            # Check for breakout signals
+            # Check for breakout signals using enhanced method
             signal = self.trend_filter.check_breakout(
                 symbol,
                 latest_bar,
@@ -131,7 +145,8 @@ class TradingEngine:
             )
             
             if signal:
-                logger.info(f"SPY Signal detected: {signal}")
+                logger.info(f"SPY Signal detected: {signal['type']} with strength {signal['strength']:.2f}")
+                logger.info(f"Market regime: {signal['market_regime']['regime']}, Gap: {signal['gap_analysis']['gap_type']} {signal['gap_analysis']['gap_pct']:.2%}")
                 self.process_signal(symbol, signal, latest_bar)
             
         except Exception as e:
@@ -155,11 +170,17 @@ class TradingEngine:
             logger.error("Failed to get SPY option quote")
             return
         
-        # Calculate position size
+        # Calculate position size with market regime awareness
         position_size = self.risk_manager.calculate_position_size(
             option_quote['ask'],
-            signal['stop_level']
+            signal['stop_level'],
+            signal.get('market_regime')
         )
+        
+        # Apply additional adjustments from option selection
+        if signal.get('position_size_mult'):
+            position_size = int(position_size * signal['position_size_mult'])
+            logger.info(f"Adjusted position size by {signal['position_size_mult']:.2f}x based on IV/spread conditions")
         
         if position_size <= 0:
             logger.warning("Position size too small for SPY")
@@ -172,28 +193,38 @@ class TradingEngine:
             self.send_trade_notification('ENTRY', position, signal, contract)
     
     def _get_valid_option_contract(self, symbol: str, signal: Dict) -> Optional[Dict]:
-        """Get and validate option contract"""
+        """Get and validate option contract with enhanced selection"""
         # Get current price
         quote = self.market_data.get_current_quote(symbol)
         if not quote or quote['price'] <= 0:
             logger.error("Failed to get SPY quote")
             return None
         
-        # Select option contract
-        contract = self.options_selector.select_option_contract(
+        # Use enhanced selection with market regime awareness
+        contract = self.options_selector.select_option_contract_enhanced(
             symbol,
             signal['type'],
-            quote['price']
+            quote['price'],
+            signal.get('market_regime')
         )
         
         if not contract:
             logger.warning("No suitable SPY option contract found")
             return None
         
+        # Check if entry conditions are favorable
+        if not contract['entry_conditions']['favorable']:
+            logger.warning(f"Unfavorable entry conditions: {contract['entry_conditions']['warnings']}")
+            # Still allow trade but with adjusted sizing
+        
         # Validate liquidity
         if not self.options_selector.validate_contract_liquidity(contract):
             logger.warning("SPY contract failed liquidity validation")
             return None
+        
+        # Apply position size adjustment from regime and IV conditions
+        if 'adjusted_position_size_mult' in contract:
+            signal['position_size_mult'] = contract['adjusted_position_size_mult']
             
         return contract
     
@@ -221,11 +252,16 @@ class TradingEngine:
             'order_id': order_id
         }
         
-        # Calculate exit levels
+        # Calculate exit levels with volatility adjustment
+        market_data = {
+            'atr': signal.get('atr', 0),
+            'market_regime': signal.get('market_regime', {})
+        }
         exit_levels = self.exit_manager.calculate_exit_levels(
             option_quote['ask'],
             signal['stop_level'],
-            signal['type']
+            signal['type'],
+            market_data
         )
         
         # Place OCO exit orders
@@ -247,12 +283,12 @@ class TradingEngine:
         return position
     
     def monitor_positions(self):
-        """Monitor open SPY positions"""
+        """Monitor open SPY positions with enhanced exit management"""
         positions = self.risk_manager.get_open_positions()
         
         for position in positions:
             try:
-                # Time stop check
+                # Time stop check with dynamic adjustment
                 if self.exit_manager.check_time_stop(position['entry_time']):
                     logger.info(f"Time stop triggered for SPY position {position['position_id']}")
                     self.close_position(position, 'TIME_STOP')
@@ -263,21 +299,59 @@ class TradingEngine:
                 if not quote:
                     continue
                 
+                current_price = quote['bid']
+                
                 # Update P&L
                 pnl = self.risk_manager.calculate_pnl(
                     position['entry_price'],
-                    quote['bid'],
+                    current_price,
                     position['contracts']
                 )
                 
                 position['unrealized_pnl'] = pnl
-                position['current_price'] = quote['bid']
+                position['current_price'] = current_price
+                
+                # Update high water mark for trailing stops
+                if 'high_water_mark' not in position:
+                    position['high_water_mark'] = current_price
+                else:
+                    position['high_water_mark'] = max(position['high_water_mark'], current_price)
+                
+                # Check for trailing stop update
+                if pnl > 0:  # Only trail stops on profitable positions
+                    new_stop = self.exit_manager.update_trailing_stop(
+                        position['position_id'],
+                        current_price,
+                        position['high_water_mark']
+                    )
+                    if new_stop:
+                        logger.info(f"Trailing stop updated to ${new_stop:.2f} for position {position['position_id']}")
+                
+                # Get current market conditions for exit suggestions
+                current_data = self.market_data.get_5min_bars('SPY', lookback_days=1)
+                if not current_data.empty:
+                    market_regime = self.trend_filter.calculate_market_regime(current_data)
+                    
+                    # Check for exit suggestions
+                    exit_suggestion = self.exit_manager.suggest_exit_action(
+                        position,
+                        market_regime
+                    )
+                    
+                    if exit_suggestion:
+                        logger.info(f"Exit suggestion for {position['position_id']}: {exit_suggestion}")
+                        
+                        # Act on critical suggestions
+                        if exit_suggestion == "CLOSE_END_OF_DAY":
+                            self.close_position(position, 'END_OF_DAY')
+                            continue
                 
                 # Log current status
                 logger.debug(f"SPY Position {position['position_id']}: "
                            f"Entry=${position['entry_price']:.2f}, "
-                           f"Current=${quote['bid']:.2f}, "
-                           f"P&L=${pnl:.2f}")
+                           f"Current=${current_price:.2f}, "
+                           f"P&L=${pnl:.2f}, "
+                           f"High=${position['high_water_mark']:.2f}")
                 
             except Exception as e:
                 logger.error(f"Error monitoring SPY position {position['position_id']}: {e}")

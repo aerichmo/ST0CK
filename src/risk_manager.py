@@ -1,6 +1,7 @@
-from datetime import datetime
-from typing import Dict
+from datetime import datetime, time
+from typing import Dict, List, Optional
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +20,58 @@ class RiskManager:
         self.trades_today = []
         self.active_positions = {}
         self.trading_enabled = True
+        self.timezone = config["session"]["timezone"]
         
-    def calculate_position_size(self, option_price: float) -> int:
-        """Calculate number of contracts based on 1% account risk"""
-        risk_amount = self.current_equity * self.position_risk_pct
-        contracts = int(risk_amount / (option_price * 100))
-        return max(1, contracts)
+    def calculate_position_size(self, option_price: float, stop_level: float, 
+                              market_regime: Optional[Dict] = None) -> int:
+        """Dynamic position sizing based on market conditions"""
+        base_risk = self.current_equity * self.position_risk_pct
+        
+        # Default regime if not provided
+        if market_regime is None:
+            market_regime = {'regime': 'NORMAL'}
+        
+        # Adjust risk based on market regime
+        regime_multipliers = {
+            "HIGH_VOLATILITY": 0.5,    # Half size in high vol
+            "CHOPPY": 0.75,            # Reduced size in choppy markets
+            "TRENDING": 1.25,          # Increase size in trending markets
+            "NORMAL": 1.0,
+            "UNKNOWN": 0.75            # Conservative if unknown
+        }
+        
+        regime_mult = regime_multipliers.get(market_regime['regime'], 1.0)
+        
+        # Adjust for time of day (reduce size after first hour)
+        current_time = datetime.now(self.timezone).time()
+        time_mult = 0.75 if current_time > time(10, 30) else 1.0
+        
+        # Adjust for consecutive losses
+        loss_mult = max(0.5, 1.0 - (self.consecutive_losses * 0.25))
+        
+        # Adjust for signal strength if available
+        signal_mult = 1.0
+        if market_regime.get('confidence', 0) > 0:
+            # Scale based on confidence (0.5 to 1.5x)
+            signal_mult = 0.5 + market_regime['confidence']
+        
+        # Calculate adjusted risk amount
+        adjusted_risk = base_risk * regime_mult * time_mult * loss_mult * signal_mult
+        
+        # Calculate contracts
+        contracts = int(adjusted_risk / (option_price * 100))
+        
+        # Apply min/max limits
+        min_contracts = 1
+        max_contracts = 10  # Cap at 10 contracts
+        
+        final_contracts = max(min_contracts, min(contracts, max_contracts))
+        
+        logger.info(f"Position sizing: Base={base_risk:.0f}, Regime={regime_mult:.2f}, "
+                   f"Time={time_mult:.2f}, Loss={loss_mult:.2f}, Signal={signal_mult:.2f}, "
+                   f"Contracts={final_contracts}")
+        
+        return final_contracts
     
     def check_trade_allowed(self) -> tuple[bool, str]:
         """Check if new trades are allowed based on risk guards"""
@@ -170,3 +217,30 @@ class RiskManager:
             'total_unrealized_pnl': sum(p.get('unrealized_pnl', 0) for p in self.active_positions.values() 
                                       if p['status'] == 'OPEN')
         }
+    
+    def log_current_state(self):
+        """Log current risk management state"""
+        metrics = self.get_risk_metrics()
+        logger.info(f"Risk State: Equity=${metrics['current_equity']:,.0f}, "
+                   f"Daily P&L=${metrics['daily_pnl']:+,.0f} ({metrics['daily_pnl_pct']:+.1f}%), "
+                   f"Positions={metrics['active_positions']}, "
+                   f"Consecutive Losses={metrics['consecutive_losses']}, "
+                   f"Trading={'ENABLED' if metrics['trading_enabled'] else 'DISABLED'}")
+    
+    def get_open_positions(self) -> List[Dict]:
+        """Get list of open positions"""
+        return [p for p in self.active_positions.values() if p['status'] == 'OPEN']
+    
+    def remove_position(self, position_id: str):
+        """Remove position from tracking"""
+        if position_id in self.active_positions:
+            self.active_positions[position_id]['status'] = 'CLOSED'
+    
+    def update_daily_pnl(self, pnl: float):
+        """Update daily P&L"""
+        self.daily_pnl += pnl
+        self.current_equity += pnl
+    
+    def calculate_pnl(self, entry_price: float, exit_price: float, contracts: int) -> float:
+        """Calculate P&L for a position"""
+        return (exit_price - entry_price) * contracts * 100

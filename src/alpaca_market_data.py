@@ -157,3 +157,94 @@ class AlpacaMarketDataProvider:
             "close": market_close,
             "is_open": True
         }
+    
+    def get_previous_close(self, symbol: str) -> Optional[float]:
+        """Get previous trading day's closing price."""
+        try:
+            # Get daily bars for the last 2 days
+            end = datetime.now()
+            start = end - timedelta(days=5)  # Get extra days to handle weekends
+            
+            bars = self.get_stock_bars(
+                symbol,
+                "1Day",
+                start,
+                end,
+                limit=5
+            )
+            
+            if not bars.empty and len(bars) >= 2:
+                # Get the second to last bar (previous day)
+                return float(bars['close'].iloc[-2])
+            elif not bars.empty:
+                # If only one bar, return it (might be today's)
+                return float(bars['close'].iloc[-1])
+                
+            logger.warning(f"Could not get previous close for {symbol}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get previous close for {symbol}: {e}")
+            return None
+    
+    def get_5min_bars(self, symbol: str, lookback_days: int = 2) -> pd.DataFrame:
+        """Get 5-minute bars with technical indicators."""
+        try:
+            end = datetime.now()
+            start = end - timedelta(days=lookback_days)
+            
+            bars = self.get_stock_bars(
+                symbol,
+                "5Min",
+                start,
+                end,
+                limit=500  # Get enough bars for indicators
+            )
+            
+            if bars.empty:
+                return pd.DataFrame()
+            
+            # Rename columns to match expected format
+            bars = bars.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume'
+            })
+            
+            # Calculate technical indicators
+            bars = self._add_technical_indicators(bars)
+            
+            return bars
+            
+        except Exception as e:
+            logger.error(f"Failed to get 5min bars for {symbol}: {e}")
+            return pd.DataFrame()
+    
+    def _add_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add technical indicators to price data."""
+        if df.empty:
+            return df
+            
+        # Calculate EMAs
+        df['EMA_8'] = df['Close'].ewm(span=8, adjust=False).mean()
+        df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
+        
+        # Calculate ATR
+        high_low = df['High'] - df['Low']
+        high_close = np.abs(df['High'] - df['Close'].shift())
+        low_close = np.abs(df['Low'] - df['Close'].shift())
+        
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+        df['ATR'] = true_range.rolling(14).mean()
+        
+        # Volume moving average
+        df['Volume_MA'] = df['Volume'].rolling(10).mean()
+        
+        return df
+    
+    def get_current_quote(self, symbol: str) -> Dict[str, float]:
+        """Alias for get_stock_quote for compatibility."""
+        return self.get_stock_quote(symbol)
