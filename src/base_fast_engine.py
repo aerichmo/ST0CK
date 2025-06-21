@@ -9,11 +9,11 @@ from typing import Dict, Optional
 import pandas as pd
 
 from .unified_market_data import UnifiedMarketData
-from .fast_options_selector import FastOptionsSelector
+from .options_selector import FastOptionsSelector
 from .alpaca_broker import AlpacaBroker
 from .trend_filter import TrendFilter
 from .risk_manager import RiskManager
-from .database_manager import DatabaseManager
+from .database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

@@ -42,4 +42,7 @@ trades.json
 credentials/
 *.pem
 *.key
-secrets/node_modules/
+secrets/
+
+# Node modules
+node_modules/

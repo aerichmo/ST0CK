@@ -1,0 +1,64 @@
+name: ST0CKA - [Strategy TBD] Bot
+
+on:
+  workflow_dispatch:  # Manual trigger only until strategy is defined
+  # Future schedule:
+  # schedule:
+  #   - cron: '30 13 * * 1-5'  # Different time than ST0CKG
+
+jobs:
+  st0cka-trading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run ST0CKA Bot
+      run: |
+        echo "Starting ST0CKA Bot..."
+        mkdir -p logs
+        python main_multi.py st0cka
+      env:
+        PYTHONUNBUFFERED: 1
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        ST0CKA_APCA_API_KEY_ID: ${{ secrets.ST0CKA_APCA_API_KEY_ID }}
+        ST0CKA_APCA_API_SECRET_KEY: ${{ secrets.ST0CKA_APCA_API_SECRET_KEY }}
+        ST0CKA_TRADING_CAPITAL: ${{ secrets.ST0CKA_TRADING_CAPITAL }}
+        EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+    
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: st0cka-logs-${{ github.run_id }}
+        path: logs/
+        retention-days: 30
+    
+    - name: Send completion notification
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "ST0CKA trading session completed successfully"
+        else
+          echo "ST0CKA trading session failed or was cancelled"
+        fi

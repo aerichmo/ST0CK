@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""
+Multi-bot launcher for ST0CK trading system
+Supports running multiple bots with different strategies
+"""
+
+import sys
+import os
+import argparse
+import logging
+import importlib
+from datetime import datetime
+from dotenv import load_dotenv
+import time
+from typing import Dict, Any
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from src.alpaca_broker import AlpacaBroker
+from src.multi_bot_database import MultiBotDatabaseManager
+from src.unified_market_data import UnifiedMarketData
+
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [%(name)s] - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(f'logs/multi_bot_{datetime.now().strftime("%Y%m%d")}.log')
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+
+class BotLauncher:
+    """Manages launching and running multiple trading bots"""
+    
+    def __init__(self, bot_id: str):
+        self.bot_id = bot_id
+        self.engine = None
+        self.config = None
+        self.is_running = False
+        
+    def load_bot_config(self) -> Dict[str, Any]:
+        """Load bot-specific configuration"""
+        try:
+            config_module = importlib.import_module(f'bots.{self.bot_id}.config')
+            config_name = f'{self.bot_id.upper()}_CONFIG'
+            self.config = getattr(config_module, config_name)
+            
+            # Replace API keys with environment variables
+            api_key_env = f'{self.bot_id.upper()}_APCA_API_KEY_ID'
+            secret_key_env = f'{self.bot_id.upper()}_APCA_API_SECRET_KEY'
+            
+            self.config['alpaca']['api_key'] = os.getenv(api_key_env)
+            self.config['alpaca']['secret_key'] = os.getenv(secret_key_env)
+            
+            # Get capital from environment or use config default
+            capital_env = f'{self.bot_id.upper()}_TRADING_CAPITAL'
+            self.config['capital'] = float(os.getenv(capital_env, self.config.get('capital', 5000)))
+            
+            logger.info(f"Loaded configuration for {self.bot_id}")
+            return self.config
+            
+        except Exception as e:
+            logger.error(f"Failed to load config for {self.bot_id}: {e}")
+            raise
+    
+    def create_broker(self) -> AlpacaBroker:
+        """Create bot-specific broker instance"""
+        return AlpacaBroker(
+            api_key=self.config['alpaca']['api_key'],
+            api_secret=self.config['alpaca']['secret_key'],
+            paper=self.config['alpaca'].get('paper', True)
+        )
+    
+    def create_database(self) -> MultiBotDatabaseManager:
+        """Create database manager with bot context"""
+        db_url = os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
+        return MultiBotDatabaseManager(
+            connection_string=db_url,
+            bot_id=self.bot_id
+        )
+    
+    def load_strategy(self):
+        """Load bot-specific strategy"""
+        try:
+            # Import strategy module
+            strategy_module = importlib.import_module(f'bots.{self.bot_id}.strategy')
+            
+            # Find strategy class (first class that inherits from BaseStrategy)
+            from bots.base.strategy import BaseStrategy
+            
+            for name, obj in strategy_module.__dict__.items():
+                if isinstance(obj, type) and issubclass(obj, BaseStrategy) and obj != BaseStrategy:
+                    strategy_class = obj
+                    return strategy_class(self.bot_id, self.config)
+            
+            raise ValueError(f"No strategy class found for {self.bot_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load strategy for {self.bot_id}: {e}")
+            raise
+    
+    def create_engine(self):
+        """Create trading engine for this bot"""
+        try:
+            # For now, use the fast engine implementation for st0ckg
+            if self.bot_id == 'st0ckg':
+                from src.st0ckg_engine import St0ckgTradingEngine
+                
+                self.engine = St0ckgTradingEngine(
+                    config=self.config,
+                    capital=self.config['capital'],
+                    db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
+                )
+            else:
+                logger.error(f"Engine not implemented for {self.bot_id}")
+                raise NotImplementedError(f"Engine not implemented for {self.bot_id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to create engine for {self.bot_id}: {e}")
+            raise
+    
+    def run(self):
+        """Run the bot"""
+        try:
+            # Load configuration
+            self.load_bot_config()
+            
+            # Check if bot is active
+            if not self.config.get('active', True):
+                logger.info(f"Bot {self.bot_id} is not active, skipping")
+                return
+            
+            # Validate API credentials
+            if not self.config['alpaca']['api_key'] or not self.config['alpaca']['secret_key']:
+                logger.error(f"API credentials not found for {self.bot_id}")
+                return
+            
+            # Create engine
+            self.create_engine()
+            
+            logger.info(f"Starting {self.bot_id} with ${self.config['capital']:,.2f} capital")
+            self.is_running = True
+            
+            # Main trading loop
+            while self.is_running:
+                try:
+                    # Only run during market hours
+                    now = datetime.now()
+                    if now.weekday() < 5 and 9 <= now.hour < 16:
+                        self.engine.run_trading_cycle()
+                    
+                    # Sleep interval based on trading window
+                    if self.engine.is_in_active_window():
+                        time.sleep(1)  # 1 second during active trading
+                    else:
+                        time.sleep(5)  # 5 seconds outside window
+                        
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    logger.error(f"Error in {self.bot_id} trading cycle: {e}")
+                    time.sleep(5)
+                    
+        except KeyboardInterrupt:
+            logger.info(f"Shutdown requested for {self.bot_id}")
+        except Exception as e:
+            logger.error(f"Fatal error in {self.bot_id}: {e}", exc_info=True)
+        finally:
+            if self.engine:
+                self.engine.shutdown()
+            self.is_running = False
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Multi-Bot Trading System Launcher')
+    parser.add_argument('bot', choices=['st0ckg', 'st0cka', 'all'],
+                      help='Which bot to run (or "all" for all active bots)')
+    parser.add_argument('--list', action='store_true',
+                      help='List all registered bots')
+    
+    args = parser.parse_args()
+    
+    # Create logs directory
+    os.makedirs('logs', exist_ok=True)
+    
+    if args.list:
+        # List all bots
+        db = MultiBotDatabaseManager(os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db'))
+        bots = db.list_active_bots()
+        print("\nRegistered Bots:")
+        print("-" * 60)
+        for bot in bots:
+            print(f"ID: {bot['bot_id']:<10} Name: {bot['bot_name']:<30} Strategy: {bot['strategy_type']}")
+        print("-" * 60)
+        return
+    
+    # Pre-fetch market data for all bots (shared resource)
+    logger.info("Initializing shared market data...")
+    market_data = UnifiedMarketData()
+    market_data.prefetch_session_data('SPY')
+    
+    if args.bot == 'all':
+        # Run all active bots (would need multiprocessing for true parallel execution)
+        logger.error("Running all bots not yet implemented - run individually for now")
+    else:
+        # Run single bot
+        launcher = BotLauncher(args.bot)
+        launcher.run()
+
+
+if __name__ == "__main__":
+    main()
