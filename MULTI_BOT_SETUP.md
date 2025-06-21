@@ -29,22 +29,21 @@ Each bot requires its own set of environment variables:
 
 ### ST0CKG Variables
 ```bash
-ST0CKG_APCA_API_KEY_ID=your-api-key
-ST0CKG_APCA_API_SECRET_KEY=your-secret-key
+STOCKG_KEY=your-api-key
+ST0CKG_SECRET=your-secret-key
 ST0CKG_TRADING_CAPITAL=5000
-ST0CKG_ALPACA_ACCOUNT=primary
 ```
 
 ### ST0CKA Variables
 ```bash
-ST0CKA_APCA_API_KEY_ID=your-api-key
-ST0CKA_APCA_API_SECRET_KEY=your-secret-key
+STOCKA_KEY=your-api-key
+ST0CKA_SECRET=your-secret-key
 ST0CKA_TRADING_CAPITAL=10000
-ST0CKA_ALPACA_ACCOUNT=secondary
 ```
 
 ### Shared Variables
 ```bash
+ALPACA_BASE_URL=https://api.alpaca.markets
 DATABASE_URL=postgresql://...
 EMAIL_USERNAME=your-email
 EMAIL_PASSWORD=your-password
@@ -87,17 +86,18 @@ Each bot has its own workflow:
 
 Add these secrets to your GitHub repository:
 
-1. **Database**
+1. **Shared Infrastructure**
    - `DATABASE_URL`
+   - `ALPACA_BASE_URL`
 
 2. **ST0CKG Bot**
-   - `ST0CKG_APCA_API_KEY_ID`
-   - `ST0CKG_APCA_API_SECRET_KEY`
+   - `STOCKG_KEY`
+   - `ST0CKG_SECRET`
    - `ST0CKG_TRADING_CAPITAL`
 
 3. **ST0CKA Bot**
-   - `ST0CKA_APCA_API_KEY_ID`
-   - `ST0CKA_APCA_API_SECRET_KEY`
+   - `STOCKA_KEY`
+   - `ST0CKA_SECRET`
    - `ST0CKA_TRADING_CAPITAL`
 
 4. **Notifications**

@@ -40,8 +40,9 @@ jobs:
       env:
         PYTHONUNBUFFERED: 1
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        ST0CKG_APCA_API_KEY_ID: ${{ secrets.ST0CKG_APCA_API_KEY_ID }}
-        ST0CKG_APCA_API_SECRET_KEY: ${{ secrets.ST0CKG_APCA_API_SECRET_KEY }}
+        STOCKG_KEY: ${{ secrets.STOCKG_KEY }}
+        ST0CKG_SECRET: ${{ secrets.ST0CKG_SECRET }}
+        ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         ST0CKG_TRADING_CAPITAL: ${{ secrets.ST0CKG_TRADING_CAPITAL }}
         EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}

@@ -36,16 +36,17 @@ psql $DATABASE_URL < migrations/add_multi_bot_support.sql
 ### 2. Environment Variables
 ```bash
 # ST0CKG Bot
-export ST0CKG_APCA_API_KEY_ID=your-key
-export ST0CKG_APCA_API_SECRET_KEY=your-secret
+export STOCKG_KEY=your-key
+export ST0CKG_SECRET=your-secret
 export ST0CKG_TRADING_CAPITAL=5000
 
 # ST0CKA Bot (when ready)
-export ST0CKA_APCA_API_KEY_ID=your-key
-export ST0CKA_APCA_API_SECRET_KEY=your-secret
+export STOCKA_KEY=your-key
+export ST0CKA_SECRET=your-secret
 export ST0CKA_TRADING_CAPITAL=10000
 
 # Shared
+export ALPACA_BASE_URL=https://api.alpaca.markets
 export DATABASE_URL=postgresql://...
 ```
 
@@ -104,9 +105,13 @@ Each bot has its own workflow:
 ### Required Secrets
 ```
 DATABASE_URL
-ST0CKG_APCA_API_KEY_ID
-ST0CKG_APCA_API_SECRET_KEY
+ALPACA_BASE_URL
+STOCKG_KEY
+ST0CKG_SECRET
 ST0CKG_TRADING_CAPITAL
+STOCKA_KEY
+ST0CKA_SECRET
+ST0CKA_TRADING_CAPITAL
 EMAIL_USERNAME
 EMAIL_PASSWORD
 WEBHOOK_URL

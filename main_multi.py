@@ -53,11 +53,20 @@ class BotLauncher:
             self.config = getattr(config_module, config_name)
             
             # Replace API keys with environment variables
-            api_key_env = f'{self.bot_id.upper()}_APCA_API_KEY_ID'
-            secret_key_env = f'{self.bot_id.upper()}_APCA_API_SECRET_KEY'
+            # Using the actual saved key format: STOCKG_KEY, ST0CKG_SECRET
+            if self.bot_id == 'st0ckg':
+                api_key_env = 'STOCKG_KEY'
+                secret_key_env = 'ST0CKG_SECRET'
+            elif self.bot_id == 'st0cka':
+                api_key_env = 'STOCKA_KEY'
+                secret_key_env = 'ST0CKA_SECRET'
+            else:
+                api_key_env = f'{self.bot_id.upper()}_KEY'
+                secret_key_env = f'{self.bot_id.upper()}_SECRET'
             
             self.config['alpaca']['api_key'] = os.getenv(api_key_env)
             self.config['alpaca']['secret_key'] = os.getenv(secret_key_env)
+            self.config['alpaca']['base_url'] = os.getenv('ALPACA_BASE_URL', 'https://api.alpaca.markets')
             
             # Get capital from environment or use config default
             capital_env = f'{self.bot_id.upper()}_TRADING_CAPITAL'
@@ -74,7 +83,8 @@ class BotLauncher:
         """Create bot-specific broker instance"""
         return AlpacaBroker(
             api_key=self.config['alpaca']['api_key'],
-            api_secret=self.config['alpaca']['secret_key'],
+            secret_key=self.config['alpaca']['secret_key'],
+            base_url=self.config['alpaca'].get('base_url'),
             paper=self.config['alpaca'].get('paper', True)
         )
     
