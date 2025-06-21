@@ -207,7 +207,12 @@
             border: 1px solid #E8EAED;
             border-radius: 20px;
             padding: 30px;
-            height: 400px;
+            height: 450px;
+            position: relative;
+        }
+        
+        .chart-container canvas {
+            max-height: 400px;
         }
         
         .live-ticker {
@@ -309,10 +314,12 @@
         
         <div class="charts-section">
             <div class="chart-container">
-                <canvas id="growthChart"></canvas>
+                <h3 style="text-align: center; color: #001E60; margin-bottom: 20px;">Account Growth Trajectory</h3>
+                <canvas id="growthChart" style="width: 100%; height: 350px;"></canvas>
             </div>
             <div class="chart-container">
-                <canvas id="riskChart"></canvas>
+                <h3 style="text-align: center; color: #001E60; margin-bottom: 20px;">Monthly Target vs Actual Performance</h3>
+                <canvas id="riskChart" style="width: 100%; height: 350px;"></canvas>
             </div>
         </div>
         
@@ -325,8 +332,12 @@
             try {
                 const response = await fetch('/api/targets');
                 const targets = await response.json();
+                console.log('Loaded targets:', targets);
                 displayMonths(targets);
-                createCharts(targets);
+                // Ensure DOM is ready before creating charts
+                setTimeout(() => {
+                    createCharts(targets);
+                }, 100);
                 updateStats(targets);
             } catch (error) {
                 console.error('Error loading targets:', error);
@@ -494,11 +505,23 @@
         }
         
         function createCharts(targets) {
+            console.log('Creating charts with targets:', targets);
+            
             // Growth Chart - Show Goals vs Actuals
-            const growthCtx = document.getElementById('growthChart').getContext('2d');
+            const growthCanvas = document.getElementById('growthChart');
+            if (!growthCanvas) {
+                console.error('Growth chart canvas not found');
+                return;
+            }
+            
+            const growthCtx = growthCanvas.getContext('2d');
             const months = Object.keys(targets);
             const goalValues = months.map(m => targets[m].target);
             const actualValues = months.map(m => targets[m].actual || null);
+            
+            console.log('Chart data - months:', months);
+            console.log('Chart data - goals:', goalValues);
+            console.log('Chart data - actuals:', actualValues);
             
             new Chart(growthCtx, {
                 type: 'line',
@@ -527,6 +550,7 @@
                 },
                 options: {
                     responsive: true,
+                    responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         title: {
@@ -542,7 +566,9 @@
                                 color: '#202124'
                             },
                             grid: {
-                                color: '#E8EAED'
+                                color: '#E8EAED',
+                                drawBorder: true,
+                                borderColor: '#E8EAED'
                             }
                         },
                         x: {
@@ -550,7 +576,9 @@
                                 color: '#202124'
                             },
                             grid: {
-                                color: '#E8EAED'
+                                color: '#E8EAED',
+                                drawBorder: true,
+                                borderColor: '#E8EAED'
                             }
                         }
                     }
@@ -558,7 +586,12 @@
             });
             
             // Performance Chart - Bar chart showing goal vs actual
-            const riskCtx = document.getElementById('riskChart').getContext('2d');
+            const riskCanvas = document.getElementById('riskChart');
+            if (!riskCanvas) {
+                console.error('Risk chart canvas not found');
+                return;
+            }
+            const riskCtx = riskCanvas.getContext('2d');
             
             new Chart(riskCtx, {
                 type: 'bar',
@@ -580,6 +613,7 @@
                 },
                 options: {
                     responsive: true,
+                    responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         title: {
@@ -595,7 +629,9 @@
                                 color: '#202124'
                             },
                             grid: {
-                                color: '#E8EAED'
+                                color: '#E8EAED',
+                                drawBorder: true,
+                                borderColor: '#E8EAED'
                             }
                         },
                         x: {
@@ -603,7 +639,9 @@
                                 color: '#202124'
                             },
                             grid: {
-                                color: '#E8EAED'
+                                color: '#E8EAED',
+                                drawBorder: true,
+                                borderColor: '#E8EAED'
                             }
                         }
                     }
@@ -653,11 +691,14 @@
         }
         
         // Initialize
-        loadTargets();
-        updateCountdown();
-        loadTradingStats();
-        setInterval(updateCountdown, 60000); // Update every minute
-        setInterval(loadTradingStats, 30000); // Update stats every 30 seconds
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing charts...');
+            loadTargets();
+            updateCountdown();
+            loadTradingStats();
+            setInterval(updateCountdown, 60000); // Update every minute
+            setInterval(loadTradingStats, 30000); // Update stats every 30 seconds
+        });
     </script>
 </body>
 </html>
