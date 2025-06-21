@@ -37,7 +37,15 @@ class TradingEngine:
                  initial_equity: float = 100000):
         self.config = config
         self.broker = broker
-        self.db = DatabaseManager(db_connection_string)
+        
+        # Try to connect to database, but continue if it fails
+        try:
+            self.db = DatabaseManager(db_connection_string)
+            logger.info("Connected to database for trade logging")
+        except Exception as e:
+            logger.warning(f"Database connection failed: {e}")
+            logger.warning("Continuing without database - trades will not be logged")
+            self.db = None
         
         # Use Alpaca market data for all brokers
         self.market_data = AlpacaMarketDataProvider()
@@ -62,6 +70,16 @@ class TradingEngine:
         self.last_bar_time = {}
         
         logger.info("Trading Engine initialized for SPY-only trading")
+    
+    def _safe_db_call(self, method_name: str, *args, **kwargs):
+        """Safely call database methods, skip if db is None"""
+        if self.db is not None:
+            try:
+                method = getattr(self.db, method_name)
+                return method(*args, **kwargs)
+            except Exception as e:
+                logger.error(f"Database operation {method_name} failed: {e}")
+        return None
         
     def initialize_session(self):
         """Initialize daily trading session"""
@@ -301,7 +319,7 @@ class TradingEngine:
         self.risk_manager.add_position(position)
         
         # Log to database
-        self.db.log_trade_entry(position, signal, contract, exit_levels)
+        self._safe_db_call('log_trade_entry', position, signal, contract, exit_levels)
         
         return position
     
@@ -412,7 +430,7 @@ class TradingEngine:
             self.risk_manager.update_daily_pnl(pnl)
             
             # Log to database
-            self.db.log_trade_exit(
+            self._safe_db_call('log_trade_exit',
                 position['position_id'],
                 exit_price,
                 position['contracts'],
@@ -553,13 +571,13 @@ class TradingEngine:
         
         # Force database flush
         if hasattr(self.db, 'force_flush'):
-            self.db.force_flush()
+            self._safe_db_call('force_flush')
     
     def generate_daily_report(self):
         """Generate daily SPY trading report"""
         try:
             account_info = self.broker.get_account_info()
-            daily_trades = self.db.get_daily_trades(datetime.now(self.timezone))
+            daily_trades = self._safe_db_call('get_daily_trades', datetime.now(self.timezone)) or []
             
             report = {
                 'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
@@ -573,7 +591,7 @@ class TradingEngine:
             logger.info(f"Daily Report: {json.dumps(report, indent=2)}")
             
             # Save report to database
-            self.db.log_risk_metrics({
+            self._safe_db_call('log_risk_metrics', {
                 'current_equity': report['final_equity'],
                 'daily_pnl': report['daily_pnl'],
                 'daily_pnl_pct': report['daily_pnl'] / 100000,  # Assuming 100k initial
@@ -594,4 +612,4 @@ class TradingEngine:
         
         # Close database connection
         if hasattr(self.db, 'close'):
-            self.db.close()
+            self._safe_db_call('close')

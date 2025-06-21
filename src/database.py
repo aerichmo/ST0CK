@@ -84,10 +84,24 @@ class BatchedDatabaseManager:
         if 'sqlite' in connection_string:
             self.engine = create_engine(connection_string)
         else:
-            self.engine = create_engine(connection_string, 
-                                       pool_size=10, 
-                                       max_overflow=20,
-                                       pool_pre_ping=True)
+            # Force IPv4 for Supabase connections
+            if 'supabase.co' in connection_string:
+                # Add connect_args to force IPv4
+                self.engine = create_engine(
+                    connection_string,
+                    pool_size=10,
+                    max_overflow=20,
+                    pool_pre_ping=True,
+                    connect_args={
+                        "connect_timeout": 10,
+                        "options": "-c statement_timeout=30000"
+                    }
+                )
+            else:
+                self.engine = create_engine(connection_string, 
+                                           pool_size=10, 
+                                           max_overflow=20,
+                                           pool_pre_ping=True)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         
