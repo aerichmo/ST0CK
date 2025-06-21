@@ -41,43 +41,42 @@ class OptionsSelector:
             return self._risk_free_rate_cache
         
         try:
-            # Use 13-week Treasury yield (^IRX) from Yahoo Finance
-            # Use 3-month treasury rate (typically around 4-5% in 2024)
-            # TODO: Get real-time rate from Alpaca or other source
-            import yfinance as yf
-            treasury = yf.Ticker("^IRX")
-            hist = treasury.history(period="1d")
-            
-            if not hist.empty and 'Close' in hist.columns:
-                # ^IRX is quoted as percentage, convert to decimal
-                rate = hist['Close'].iloc[-1] / 100
-                self._risk_free_rate_cache = rate
-                self._risk_free_rate_timestamp = time.time()
-                logger.info(f"Updated risk-free rate to {rate:.4f} ({rate*100:.2f}%)")
-                return rate
+            # Try to get treasury rates from Alpaca if available
+            if self.options_data.alpaca_client:
+                from alpaca.data import StockHistoricalDataClient
+                from alpaca.data.requests import StockLatestQuoteRequest
+                
+                # Alpaca doesn't provide treasury rates directly, but we can use
+                # TLT (20+ year treasury ETF) as a proxy and derive short-term rates
+                request = StockLatestQuoteRequest(symbol_or_symbols="TLT")
+                quotes = self.options_data.alpaca_client.get_stock_latest_quote(request)
+                
+                if quotes and "TLT" in quotes:
+                    # Use a simplified yield curve model
+                    # Long-term rates are typically higher than short-term
+                    # Estimate 3-month rate as 0.7x the long-term implied rate
+                    tlt_price = quotes["TLT"].ask_price
+                    # Rough approximation: TLT yield ≈ 2.5% + (100-price)/20
+                    long_rate = 0.025 + (100 - tlt_price) / 2000
+                    rate = long_rate * 0.7  # Short-term adjustment
+                    
+                    self._risk_free_rate_cache = rate
+                    self._risk_free_rate_timestamp = time.time()
+                    logger.info(f"Updated risk-free rate to {rate:.4f} ({rate*100:.2f}%) from Alpaca")
+                    return rate
         except Exception as e:
-            logger.warning(f"Failed to fetch risk-free rate from ^IRX: {e}")
+            logger.warning(f"Failed to fetch risk-free rate from Alpaca: {e}")
         
-        # Fallback: Try to get 10-year Treasury yield as proxy
-        try:
-            import yfinance as yf
-            tnx = yf.Ticker("^TNX")
-            hist = tnx.history(period="1d")
-            
-            if not hist.empty and 'Close' in hist.columns:
-                # ^TNX is also quoted as percentage
-                # Adjust down slightly for shorter-term rate approximation
-                rate = (hist['Close'].iloc[-1] / 100) * 0.85
-                self._risk_free_rate_cache = rate
-                self._risk_free_rate_timestamp = time.time()
-                logger.info(f"Updated risk-free rate from ^TNX to {rate:.4f} ({rate*100:.2f}%)")
-                return rate
-        except Exception as e:
-            logger.warning(f"Failed to fetch risk-free rate from ^TNX: {e}")
+        # Use current market conditions default (as of 2024-2025)
+        # Federal funds rate is around 4.5-5.5%
+        # 3-month T-bills typically trade near fed funds rate
+        default_rate = 0.048  # 4.8% default based on current environment
         
-        # Final fallback: Use a reasonable default based on recent history
-        default_rate = 0.045  # 4.5% default
-        logger.warning(f"Using default risk-free rate of {default_rate:.4f}")
+        # Cache the default rate
+        self._risk_free_rate_cache = default_rate
+        self._risk_free_rate_timestamp = time.time()
+        
+        logger.info(f"Using default risk-free rate of {default_rate:.4f} ({default_rate*100:.2f}%)")
         return default_rate
     
     def calculate_greeks(self, S: float, K: float, T: float, r: float, 

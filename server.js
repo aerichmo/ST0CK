@@ -59,11 +59,11 @@ app.get('/api/stats', (req, res) => {
   res.json(stats);
 });
 
-// API endpoint for SPY data (using Yahoo Finance API)
+// API endpoint for SPY data (using Alpaca API)
 app.get('/api/spy-data', async (req, res) => {
   try {
     // For demo purposes, return sample data
-    // In production, this would fetch from Yahoo Finance or Alpaca
+    // In production, this would fetch from Alpaca
     const now = Date.now() / 1000;
     const data = [];
     
