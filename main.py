@@ -9,6 +9,7 @@ from config.trading_config import TRADING_CONFIG
 from src.trading_engine import TradingEngine
 from src.broker_interface import PaperTradingBroker
 from src.mcp_broker import MCPBroker
+from src.alpaca_broker import AlpacaBroker
 
 load_dotenv()
 
@@ -28,20 +29,23 @@ def main():
     parser.add_argument('--db', type=str, 
                       default='postgresql://localhost/options_scalper',
                       help='Database connection string')
-    parser.add_argument('--broker', choices=['mcp', 'paper'], default='mcp',
-                      help='Broker implementation to use (default: mcp)')
+    parser.add_argument('--broker', choices=['alpaca', 'mcp', 'paper'], default='alpaca',
+                      help='Broker implementation to use (default: alpaca)')
     
     args = parser.parse_args()
     
-    if args.broker == 'mcp':
+    if args.broker == 'alpaca':
+        logger.info(f"Starting with Alpaca broker in {args.mode.upper()} mode")
+        broker = AlpacaBroker(paper=(args.mode == 'paper'))
+    elif args.broker == 'mcp':
         logger.info(f"Starting with MCP broker in {args.mode.upper()} mode")
         broker = MCPBroker(mode=args.mode)
-    elif args.mode == 'paper':
+    elif args.broker == 'paper':
         logger.info("Starting with built-in PAPER TRADING broker")
         initial_capital = args.capital if args.capital else 100000
         broker = PaperTradingBroker(initial_capital=initial_capital)
     else:
-        logger.error("Live trading requires MCP broker. Use --broker mcp")
+        logger.error("Invalid broker selection")
         sys.exit(1)
     
     try:

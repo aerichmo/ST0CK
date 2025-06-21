@@ -45,7 +45,9 @@ class TradingEngine:
             
         self.trend_filter = TrendFilter(config)
         self.trend_filter.market_data = self.market_data  # Set market data reference
-        self.options_selector = OptionsSelector(config)
+        # Pass alpaca client if available for high-speed options data
+        alpaca_client = getattr(broker, 'data_client', None) if hasattr(broker, 'data_client') else None
+        self.options_selector = OptionsSelector(config, alpaca_client)
         self.risk_manager = RiskManager(config, initial_equity)
         self.exit_manager = ExitManager(config)
         

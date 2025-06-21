@@ -1,4 +1,3 @@
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -6,11 +5,12 @@ from typing import Dict, Optional, List
 import logging
 from scipy.stats import norm
 import time
+from .alpaca_options_data import AlpacaOptionsData
 
 logger = logging.getLogger(__name__)
 
 class OptionsSelector:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, alpaca_client=None):
         self.config = config
         self.target_delta = config["options"]["target_delta"]
         self.delta_tolerance = config["options"]["delta_tolerance"]
@@ -20,6 +20,8 @@ class OptionsSelector:
         self._iv_history_cache = {}
         self._vix_cache = None
         self._vix_cache_timestamp = 0
+        # Initialize high-speed options data provider
+        self.options_data = AlpacaOptionsData(alpaca_client)
         
     def get_weekly_expiry(self) -> str:
         """Get the nearest weekly expiry date for SPY"""
@@ -40,6 +42,9 @@ class OptionsSelector:
         
         try:
             # Use 13-week Treasury yield (^IRX) from Yahoo Finance
+            # Use 3-month treasury rate (typically around 4-5% in 2024)
+            # TODO: Get real-time rate from Alpaca or other source
+            import yfinance as yf
             treasury = yf.Ticker("^IRX")
             hist = treasury.history(period="1d")
             
@@ -55,6 +60,7 @@ class OptionsSelector:
         
         # Fallback: Try to get 10-year Treasury yield as proxy
         try:
+            import yfinance as yf
             tnx = yf.Ticker("^TNX")
             hist = tnx.history(period="1d")
             
@@ -113,8 +119,6 @@ class OptionsSelector:
             return None
             
         try:
-            ticker = yf.Ticker(symbol)
-            
             # Get dynamic risk-free rate
             r = self.get_risk_free_rate()
             
@@ -122,90 +126,94 @@ class OptionsSelector:
             now = datetime.now()
             if now.weekday() < 5 and now.hour >= 9 and now.hour < 16:
                 # Try today's expiry first (0DTE)
-                today_expiry = now.strftime('%Y-%m-%d')
-                try:
-                    option_chain = ticker.option_chain(today_expiry)
-                    expiry = today_expiry
-                    logger.info("Using 0DTE options for SPY")
-                except:
-                    # Fall back to weekly
-                    expiry = self.get_weekly_expiry()
-                    option_chain = ticker.option_chain(expiry)
+                expiry_date = now
+                logger.info("Looking for 0DTE options for SPY")
             else:
                 # Use weekly expiry
-                expiry = self.get_weekly_expiry()
-                option_chain = ticker.option_chain(expiry)
+                days_until_friday = (4 - now.weekday()) % 7
+                if days_until_friday == 0 and now.hour >= 16:
+                    days_until_friday = 7
+                expiry_date = now + timedelta(days=days_until_friday)
             
-            if signal_type == 'LONG':
-                contracts = option_chain.calls
-                option_type = 'CALL'
-            else:
-                contracts = option_chain.puts
-                option_type = 'PUT'
+            # Determine option type
+            option_type = 'CALL' if signal_type == 'LONG' else 'PUT'
             
-            # Filter for liquid contracts (SPY typically has excellent liquidity)
-            contracts = contracts[
-                (contracts['volume'] >= self.config["options"]["min_volume"]) & 
-                (contracts['bid'] > 0) & 
-                (contracts['ask'] > 0) &
-                (contracts['openInterest'] >= self.config["options"]["min_open_interest"])
-            ].copy()
+            # Use high-speed options data provider with criteria
+            contracts = self.options_data.find_options_by_criteria(
+                symbol=symbol,
+                expiration=expiry_date,
+                option_type=option_type,
+                target_delta=self.target_delta,
+                min_volume=self.config["options"]["min_volume"]
+            )
             
-            if contracts.empty:
+            if not contracts:
                 logger.warning("No liquid contracts found for SPY")
                 return None
             
-            days_to_expiry = max(1, (datetime.strptime(expiry, '%Y-%m-%d') - datetime.now()).days + 1)
-            T = days_to_expiry / 365.0
-            
-            # Calculate delta for each contract and find best match
+            # Contracts already filtered and sorted by our criteria
+            # Just need to enhance with additional calculations
             candidates = []
             
-            for idx, row in contracts.iterrows():
-                strike = row['strike']
-                bid = row['bid']
-                ask = row['ask']
-                mid_price = (bid + ask) / 2
-                implied_vol = row.get('impliedVolatility', 0.20)  # SPY typically ~20% IV
-                
-                # Skip if spread is too wide (rare for SPY)
-                spread_pct = (ask - bid) / mid_price if mid_price > 0 else 1
+            for contract in contracts:
+                # Contract already has all the data we need
+                strike = contract['strike']
+                bid = contract['bid']
+                ask = contract['ask']
+                mid_price = contract['mid_price']
+                implied_vol = contract.get('implied_volatility', 0.20)
+                spread_pct = contract.get('spread_pct', 0)
                 if spread_pct > self.config["options"]["max_spread_pct"]:
                     continue
                 
-                greeks = self.calculate_greeks(
-                    S=current_price,
-                    K=strike,
-                    T=T,
-                    r=r,
-                    sigma=implied_vol,
-                    option_type=option_type
-                )
+                # Calculate time to expiry
+                days_to_expiry = contract.get('days_to_expiry', 1)
+                T = days_to_expiry / 365.0
+                
+                # Calculate or use existing Greeks
+                if 'delta' in contract and contract['delta'] != 0:
+                    greeks = {
+                        'delta': contract['delta'],
+                        'gamma': contract.get('gamma', 0),
+                        'theta': contract.get('theta', 0),
+                        'vega': contract.get('vega', 0)
+                    }
+                else:
+                    greeks = self.calculate_greeks(
+                        S=current_price,
+                        K=strike,
+                        T=T,
+                        r=r,
+                        sigma=implied_vol,
+                        option_type=option_type
+                    )
                 
                 delta = abs(greeks['delta'])
                 delta_diff = abs(delta - self.target_delta)
                 
                 if delta_diff <= self.delta_tolerance:
-                    candidates.append({
+                    # Build enhanced contract info
+                    enhanced_contract = {
                         'symbol': symbol,
-                        'contract_symbol': row['contractSymbol'],
+                        'contract_symbol': contract['contract_symbol'],
                         'strike': strike,
-                        'expiry': expiry,
+                        'expiry': contract['expiration'],
                         'option_type': option_type,
                         'bid': bid,
                         'ask': ask,
                         'mid_price': mid_price,
-                        'last': row.get('lastPrice', mid_price),
-                        'volume': row['volume'],
-                        'open_interest': row['openInterest'],
+                        'last': contract.get('last', mid_price),
+                        'volume': contract['volume'],
+                        'open_interest': contract['open_interest'],
                         'implied_volatility': implied_vol,
                         'greeks': greeks,
                         'days_to_expiry': days_to_expiry,
                         'delta_diff': delta_diff,
                         'spread_pct': spread_pct,
-                        'liquidity_score': self._calculate_liquidity_score(row),
+                        'liquidity_score': contract['volume'] + contract['open_interest'] / 10,
                         'risk_free_rate': r
-                    })
+                    }
+                    candidates.append(enhanced_contract)
             
             if not candidates:
                 logger.warning(f"No contracts found within delta tolerance for SPY")
