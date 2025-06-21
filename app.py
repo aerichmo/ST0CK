@@ -32,9 +32,36 @@ def index():
     
     return html_content
 
+@app.route('/charts.html')
+def charts():
+    with open('public/charts.html', 'r') as f:
+        return f.read()
+
 @app.route('/api/targets')
 def get_targets():
     return json.dumps(MONTHLY_TARGETS)
+
+@app.route('/api/spy-data')
+def get_spy_data():
+    # Return same demo data as Node.js version
+    import time
+    now = time.time()
+    data = []
+    
+    for i in range(78, -1, -1):
+        t = now - (i * 300)
+        base_price = 450 + (5 * (i % 10) / 10)
+        
+        data.append({
+            'time': int(t),
+            'open': base_price + (0.1 - 0.2 * (i % 2)),
+            'high': base_price + 0.5,
+            'low': base_price - 0.5,
+            'close': base_price + (0.2 - 0.4 * (i % 3) / 3),
+            'volume': 1000000 + (i * 10000)
+        })
+    
+    return json.dumps({'data': data, 'symbol': 'SPY'})
 
 if __name__ == '__main__':
     import os

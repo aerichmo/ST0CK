@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ST0CK - Live Charts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: #111;
+            border-bottom: 1px solid #333;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+        
+        .nav-link {
+            color: #999;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            color: #00ff88;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .ticker-bar {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .ticker-symbol {
+            font-weight: 600;
+            color: #00aaff;
+        }
+        
+        .ticker-price {
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .ticker-change {
+            font-size: 14px;
+        }
+        
+        .positive { color: #00ff88; }
+        .negative { color: #ff4444; }
+        
+        .chart-container {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .timeframe-selector {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .timeframe-btn {
+            background: #222;
+            border: 1px solid #333;
+            color: #999;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .timeframe-btn:hover {
+            border-color: #00ff88;
+            color: #fff;
+        }
+        
+        .timeframe-btn.active {
+            background: #00ff88;
+            color: #000;
+            border-color: #00ff88;
+        }
+        
+        #mainChart {
+            height: 500px;
+            margin-bottom: 20px;
+        }
+        
+        .indicators-panel {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .indicators-title {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #00ff88;
+        }
+        
+        .indicator-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+        
+        .indicator-row:last-child {
+            border-bottom: none;
+        }
+        
+        .indicator-label {
+            color: #999;
+        }
+        
+        .indicator-value {
+            font-weight: 600;
+        }
+        
+        .trading-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .info-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .info-card h3 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            color: #999;
+        }
+        
+        .info-value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .nav-links {
+                gap: 15px;
+            }
+            
+            .ticker-bar {
+                justify-content: flex-start;
+            }
+            
+            #mainChart {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">ST0CK</a>
+            <ul class="nav-links">
+                <li><a href="/" class="nav-link">Dashboard</a></li>
+                <li><a href="/charts.html" class="nav-link active">Charts</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <div class="ticker-bar">
+            <div class="ticker-item">
+                <span class="ticker-symbol">SPY</span>
+                <span class="ticker-price" id="spy-price">--</span>
+                <span class="ticker-change" id="spy-change">--</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-symbol">Market Status</span>
+                <span class="ticker-price" id="market-status">--</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-symbol">Next ORB</span>
+                <span class="ticker-price" id="next-orb">--</span>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-header">
+                <h2 class="chart-title">SPY - Real-Time Chart</h2>
+                <div class="timeframe-selector">
+                    <button class="timeframe-btn active" data-timeframe="5">5m</button>
+                    <button class="timeframe-btn" data-timeframe="15">15m</button>
+                    <button class="timeframe-btn" data-timeframe="60">1H</button>
+                    <button class="timeframe-btn" data-timeframe="D">1D</button>
+                </div>
+            </div>
+            <div id="mainChart"></div>
+            
+            <div class="indicators-panel">
+                <h3 class="indicators-title">Current Indicators</h3>
+                <div class="indicator-row">
+                    <span class="indicator-label">EMA 8</span>
+                    <span class="indicator-value" id="ema8">--</span>
+                </div>
+                <div class="indicator-row">
+                    <span class="indicator-label">EMA 21</span>
+                    <span class="indicator-value" id="ema21">--</span>
+                </div>
+                <div class="indicator-row">
+                    <span class="indicator-label">Volume Ratio</span>
+                    <span class="indicator-value" id="volume-ratio">--</span>
+                </div>
+                <div class="indicator-row">
+                    <span class="indicator-label">ATR</span>
+                    <span class="indicator-value" id="atr">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="trading-info">
+            <div class="info-card">
+                <h3>Opening Range</h3>
+                <div class="info-item">
+                    <span>High</span>
+                    <span class="info-value" id="or-high">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Low</span>
+                    <span class="info-value" id="or-low">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Range</span>
+                    <span class="info-value" id="or-range">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Position</span>
+                    <span class="info-value" id="or-position">--</span>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>Trading Session</h3>
+                <div class="info-item">
+                    <span>Active Window</span>
+                    <span class="info-value">9:40 - 10:30 AM ET</span>
+                </div>
+                <div class="info-item">
+                    <span>Current Time</span>
+                    <span class="info-value" id="current-time">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Session Status</span>
+                    <span class="info-value" id="session-status">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Time to Close</span>
+                    <span class="info-value" id="time-to-close">--</span>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>Signal Status</h3>
+                <div class="info-item">
+                    <span>Trend</span>
+                    <span class="info-value" id="trend-status">--</span>
+                </div>
+                <div class="info-item">
+                    <span>EMA Cross</span>
+                    <span class="info-value" id="ema-cross">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Volume Confirm</span>
+                    <span class="info-value" id="volume-confirm">--</span>
+                </div>
+                <div class="info-item">
+                    <span>Signal</span>
+                    <span class="info-value" id="signal-status">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script>
+        // Initialize chart
+        const chart = LightweightCharts.createChart(document.getElementById('mainChart'), {
+            width: document.getElementById('mainChart').offsetWidth,
+            height: 500,
+            layout: {
+                background: { color: '#0a0a0a' },
+                textColor: '#999',
+            },
+            grid: {
+                vertLines: { color: '#333' },
+                horzLines: { color: '#333' },
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+            },
+            timeScale: {
+                borderColor: '#333',
+                timeVisible: true,
+                secondsVisible: false,
+            },
+            rightPriceScale: {
+                borderColor: '#333',
+            },
+        });
+
+        const candlestickSeries = chart.addCandlestickSeries({
+            upColor: '#00ff88',
+            downColor: '#ff4444',
+            borderVisible: false,
+            wickUpColor: '#00ff88',
+            wickDownColor: '#ff4444',
+        });
+
+        const volumeSeries = chart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: {
+                type: 'volume',
+            },
+            priceScaleId: '',
+            scaleMargins: {
+                top: 0.8,
+                bottom: 0,
+            },
+        });
+
+        const ema8Series = chart.addLineSeries({
+            color: '#00aaff',
+            lineWidth: 2,
+            title: 'EMA 8',
+        });
+
+        const ema21Series = chart.addLineSeries({
+            color: '#ffaa00',
+            lineWidth: 2,
+            title: 'EMA 21',
+        });
+
+        // OR levels
+        const orHighLine = chart.addLineSeries({
+            color: '#00ff88',
+            lineWidth: 1,
+            lineStyle: 2,
+            title: 'OR High',
+        });
+
+        const orLowLine = chart.addLineSeries({
+            color: '#ff4444',
+            lineWidth: 1,
+            lineStyle: 2,
+            title: 'OR Low',
+        });
+
+        // Update functions
+        function updateMarketStatus() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+            
+            let status = 'CLOSED';
+            let sessionStatus = 'Inactive';
+            
+            if (isWeekday) {
+                if (hours === 9 && minutes >= 30 || hours >= 10 && hours < 16) {
+                    status = 'OPEN';
+                    
+                    if (hours === 9 && minutes >= 40 || hours === 10 && minutes <= 30) {
+                        sessionStatus = 'ACTIVE TRADING';
+                    } else {
+                        sessionStatus = 'Monitoring Only';
+                    }
+                } else if (hours >= 4 && hours < 9 || (hours === 9 && minutes < 30)) {
+                    status = 'PRE-MARKET';
+                } else if (hours >= 16 && hours < 20) {
+                    status = 'AFTER-HOURS';
+                }
+            }
+            
+            document.getElementById('market-status').textContent = status;
+            document.getElementById('market-status').className = status === 'OPEN' ? 'positive' : '';
+            document.getElementById('session-status').textContent = sessionStatus;
+            document.getElementById('current-time').textContent = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York' });
+            
+            // Update next ORB time
+            const tomorrow = new Date(now);
+            if (hours >= 10) {
+                tomorrow.setDate(tomorrow.getDate() + 1);
+            }
+            tomorrow.setHours(9, 30, 0);
+            const msToORB = tomorrow - now;
+            const hoursToORB = Math.floor(msToORB / (1000 * 60 * 60));
+            const minsToORB = Math.floor((msToORB % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('next-orb').textContent = `${hoursToORB}h ${minsToORB}m`;
+        }
+
+        // Fetch and update data
+        async function updateChartData(timeframe = '5') {
+            try {
+                const response = await fetch('/api/spy-data?timeframe=' + timeframe);
+                const result = await response.json();
+                const data = result.data;
+                
+                if (data && data.length > 0) {
+                    // Update candlestick data
+                    candlestickSeries.setData(data);
+                    
+                    // Calculate volume data
+                    const volumeData = data.map(d => ({
+                        time: d.time,
+                        value: d.volume,
+                        color: d.close > d.open ? '#00ff8833' : '#ff444433'
+                    }));
+                    volumeSeries.setData(volumeData);
+                    
+                    // Calculate EMAs
+                    const ema8Data = calculateEMA(data, 8);
+                    const ema21Data = calculateEMA(data, 21);
+                    ema8Series.setData(ema8Data);
+                    ema21Series.setData(ema21Data);
+                    
+                    // Update current values
+                    const latest = data[data.length - 1];
+                    const previous = data[data.length - 2];
+                    const change = latest.close - previous.close;
+                    const changePercent = (change / previous.close) * 100;
+                    
+                    document.getElementById('spy-price').textContent = `$${latest.close.toFixed(2)}`;
+                    document.getElementById('spy-change').textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+                    document.getElementById('spy-change').className = `ticker-change ${change >= 0 ? 'positive' : 'negative'}`;
+                    
+                    // Update indicators
+                    if (ema8Data.length > 0) {
+                        document.getElementById('ema8').textContent = `$${ema8Data[ema8Data.length - 1].value.toFixed(2)}`;
+                    }
+                    if (ema21Data.length > 0) {
+                        document.getElementById('ema21').textContent = `$${ema21Data[ema21Data.length - 1].value.toFixed(2)}`;
+                    }
+                    
+                    // Update OR levels (9:30-9:40 AM)
+                    updateOpeningRange(data);
+                    
+                    // Fit content
+                    chart.timeScale().fitContent();
+                }
+            } catch (error) {
+                console.error('Error updating chart:', error);
+            }
+        }
+
+        function calculateEMA(data, period) {
+            const emaData = [];
+            let ema = null;
+            const multiplier = 2 / (period + 1);
+            
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    // Not enough data for EMA
+                    continue;
+                } else if (i === period - 1) {
+                    // First EMA is SMA
+                    let sum = 0;
+                    for (let j = 0; j < period; j++) {
+                        sum += data[i - j].close;
+                    }
+                    ema = sum / period;
+                } else {
+                    // EMA calculation
+                    ema = (data[i].close - ema) * multiplier + ema;
+                }
+                
+                if (ema !== null) {
+                    emaData.push({
+                        time: data[i].time,
+                        value: ema
+                    });
+                }
+            }
+            
+            return emaData;
+        }
+
+        function updateOpeningRange(data) {
+            // Find 9:30-9:40 AM bars
+            const orBars = data.filter(bar => {
+                const date = new Date(bar.time * 1000);
+                const hours = date.getHours();
+                const minutes = date.getMinutes();
+                return hours === 9 && minutes >= 30 && minutes < 40;
+            });
+            
+            if (orBars.length > 0) {
+                const orHigh = Math.max(...orBars.map(b => b.high));
+                const orLow = Math.min(...orBars.map(b => b.low));
+                const orRange = orHigh - orLow;
+                const currentPrice = data[data.length - 1].close;
+                
+                document.getElementById('or-high').textContent = `$${orHigh.toFixed(2)}`;
+                document.getElementById('or-low').textContent = `$${orLow.toFixed(2)}`;
+                document.getElementById('or-range').textContent = `$${orRange.toFixed(2)}`;
+                
+                let position = 'Inside';
+                if (currentPrice > orHigh) position = 'Above (+Bullish)';
+                else if (currentPrice < orLow) position = 'Below (-Bearish)';
+                document.getElementById('or-position').textContent = position;
+                
+                // Draw OR lines
+                const orData = data.map(d => ({ time: d.time, value: orHigh }));
+                const orLowData = data.map(d => ({ time: d.time, value: orLow }));
+                orHighLine.setData(orData);
+                orLowLine.setData(orLowData);
+            }
+        }
+
+        // Timeframe selector
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                updateChartData(e.target.dataset.timeframe);
+            });
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            chart.applyOptions({ width: document.getElementById('mainChart').offsetWidth });
+        });
+
+        // Initialize
+        updateMarketStatus();
+        updateChartData('5');
+        
+        // Update every 5 seconds
+        setInterval(() => {
+            updateMarketStatus();
+            updateChartData(document.querySelector('.timeframe-btn.active').dataset.timeframe);
+        }, 5000);
+    </script>
+</body>
+</html>

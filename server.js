@@ -72,6 +72,9 @@ app.get('/api/spy-data', async (req, res) => {
   }
 });
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // Serve the main page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
