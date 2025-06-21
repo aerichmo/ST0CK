@@ -80,10 +80,14 @@ class BatchedDatabaseManager:
     
     def __init__(self, connection_string: str, batch_size: int = 10, 
                  flush_interval: float = 5.0):
-        self.engine = create_engine(connection_string, 
-                                   pool_size=10, 
-                                   max_overflow=20,
-                                   pool_pre_ping=True)
+        # SQLite doesn't support pool_size parameters
+        if 'sqlite' in connection_string:
+            self.engine = create_engine(connection_string)
+        else:
+            self.engine = create_engine(connection_string, 
+                                       pool_size=10, 
+                                       max_overflow=20,
+                                       pool_pre_ping=True)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         

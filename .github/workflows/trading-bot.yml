@@ -58,6 +58,10 @@ jobs:
         python main.py --mode paper --broker alpaca
       env:
         PYTHONUNBUFFERED: 1
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+        ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
     
     - name: Upload logs
       if: always()

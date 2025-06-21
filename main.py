@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import argparse
 import logging
 from dotenv import load_dotenv
@@ -27,7 +28,7 @@ def main():
     parser.add_argument('--capital', type=float, default=None,
                       help='Initial trading capital (default: fetch from broker)')
     parser.add_argument('--db', type=str, 
-                      default='postgresql://localhost/options_scalper',
+                      default=os.getenv('DATABASE_URL', 'sqlite:///trading.db'),
                       help='Database connection string')
     parser.add_argument('--broker', choices=['alpaca', 'mcp', 'paper'], default='alpaca',
                       help='Broker implementation to use (default: alpaca)')
