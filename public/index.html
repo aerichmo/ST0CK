@@ -13,7 +13,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000;
+            background: #001E60;
             color: #fff;
             min-height: 100vh;
             padding: 20px;
@@ -32,7 +32,7 @@
         .title {
             font-size: 48px;
             font-weight: 700;
-            background: linear-gradient(135deg, #00ff88, #00aaff);
+            background: linear-gradient(135deg, #FFFFFF, #4DBDF5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
@@ -40,7 +40,7 @@
         
         .subtitle {
             font-size: 20px;
-            color: #666;
+            color: #A9DDF7;
         }
         
         .stats-grid {
@@ -51,8 +51,8 @@
         }
         
         .stat-card {
-            background: #111;
-            border: 1px solid #333;
+            background: #0053E2;
+            border: 1px solid #4DBDF5;
             border-radius: 15px;
             padding: 25px;
             text-align: center;
@@ -67,13 +67,13 @@
         
         .stat-label {
             font-size: 14px;
-            color: #666;
+            color: #A9DDF7;
             text-transform: uppercase;
         }
         
         .progress-section {
-            background: #111;
-            border: 1px solid #333;
+            background: #0053E2;
+            border: 1px solid #4DBDF5;
             border-radius: 20px;
             padding: 30px;
             margin-bottom: 40px;
@@ -92,8 +92,8 @@
         }
         
         .month-card {
-            background: #1a1a1a;
-            border: 2px solid #333;
+            background: #0053E2;
+            border: 2px solid #4DBDF5;
             border-radius: 15px;
             padding: 20px;
             position: relative;
@@ -106,7 +106,7 @@
         }
         
         .month-card.completed {
-            border-color: #00aaff;
+            border-color: #4DBDF5;
         }
         
         .month-header {
@@ -122,7 +122,7 @@
         }
         
         .risk-badge {
-            background: #333;
+            background: #4DBDF5;
             color: #fff;
             padding: 4px 10px;
             border-radius: 20px;
@@ -135,7 +135,7 @@
         }
         
         .progress-bar {
-            background: #222;
+            background: #4DBDF5;
             height: 8px;
             border-radius: 4px;
             overflow: hidden;
@@ -143,7 +143,7 @@
         }
         
         .progress-fill {
-            background: linear-gradient(90deg, #00ff88, #00aaff);
+            background: linear-gradient(90deg, #00ff88, #4DBDF5);
             height: 100%;
             transition: width 0.3s ease;
         }
@@ -155,7 +155,7 @@
         }
         
         .target-value {
-            color: #666;
+            color: #A9DDF7;
         }
         
         .actual-value {
@@ -171,16 +171,16 @@
         }
         
         .chart-container {
-            background: #111;
-            border: 1px solid #333;
+            background: #0053E2;
+            border: 1px solid #4DBDF5;
             border-radius: 20px;
             padding: 30px;
             height: 400px;
         }
         
         .live-ticker {
-            background: #111;
-            border: 1px solid #333;
+            background: #0053E2;
+            border: 1px solid #4DBDF5;
             border-radius: 15px;
             padding: 15px;
             margin-bottom: 40px;
@@ -198,7 +198,7 @@
         
         .ticker-symbol {
             font-weight: 600;
-            color: #00aaff;
+            color: #4DBDF5;
         }
         
         .ticker-price {
@@ -233,12 +233,12 @@
     </style>
 </head>
 <body>
-    <nav style="background: #111; border-bottom: 1px solid #333; padding: 15px 20px; position: sticky; top: 0; z-index: 100;">
+    <nav style="background: #0053E2; border-bottom: 1px solid #4DBDF5; padding: 15px 20px; position: sticky; top: 0; z-index: 100;">
         <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
-            <a href="/" style="font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #00ff88, #00aaff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none;">ST0CK</a>
+            <a href="/" style="font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #FFFFFF, #4DBDF5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none;">ST0CK</a>
             <div style="display: flex; gap: 30px;">
                 <a href="/" style="color: #00ff88; text-decoration: none;">Dashboard</a>
-                <a href="/charts.html" style="color: #999; text-decoration: none; transition: color 0.3s;">Charts</a>
+                <a href="/charts.html" style="color: #A9DDF7; text-decoration: none; transition: color 0.3s;">Charts</a>
             </div>
         </div>
     </nav>
@@ -344,7 +344,7 @@
                             <span class="actual-value">${data.actual ? `$${data.actual.toLocaleString()}` : 'Pending'}</span>
                         </div>
                     </div>
-                    <div style="text-align: center; margin-top: 10px; color: #666;">
+                    <div style="text-align: center; margin-top: 10px; color: #A9DDF7;">
                         ${getMonthlyReturn(data)}% monthly return
                     </div>
                 `;
@@ -402,18 +402,18 @@
                         y: {
                             ticks: {
                                 callback: value => '$' + value.toLocaleString(),
-                                color: '#666'
+                                color: '#A9DDF7'
                             },
                             grid: {
-                                color: '#333'
+                                color: '#4DBDF5'
                             }
                         },
                         x: {
                             ticks: {
-                                color: '#666'
+                                color: '#A9DDF7'
                             },
                             grid: {
-                                color: '#333'
+                                color: '#4DBDF5'
                             }
                         }
                     }
@@ -448,18 +448,18 @@
                         y: {
                             ticks: {
                                 callback: value => value + '%',
-                                color: '#666'
+                                color: '#A9DDF7'
                             },
                             grid: {
-                                color: '#333'
+                                color: '#4DBDF5'
                             }
                         },
                         x: {
                             ticks: {
-                                color: '#666'
+                                color: '#A9DDF7'
                             },
                             grid: {
-                                color: '#333'
+                                color: '#4DBDF5'
                             }
                         }
                     }
