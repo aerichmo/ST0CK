@@ -272,16 +272,61 @@ class AlpacaBroker(BrokerInterface):
     
     def get_option_quote(self, contract_symbol: str) -> Optional[Dict]:
         """
-        Get real-time option quote
-        
-        Note: Alpaca does not yet support options data
+        Get real-time option quote using Alpaca's Options API
         """
         if not self.connected:
             return None
             
-        # Alpaca does not yet provide options quotes
-        logger.warning(f"Alpaca options quotes not available for {contract_symbol}")
-        return None
+        try:
+            # Use the options data client
+            from alpaca.data.historical.option import OptionHistoricalDataClient
+            from alpaca.data.requests import OptionLatestQuoteRequest
+            
+            # Initialize options client if needed
+            if not hasattr(self, 'option_client'):
+                self.option_client = OptionHistoricalDataClient(
+                    self.api_key,
+                    self.secret_key
+                )
+            
+            # Get option quote
+            request = OptionLatestQuoteRequest(symbol_or_symbols=contract_symbol)
+            quotes = self.option_client.get_option_latest_quote(request)
+            
+            if contract_symbol in quotes:
+                quote = quotes[contract_symbol]
+                
+                # Get underlying price for context
+                underlying_symbol = contract_symbol[:3]  # Extract SPY from option symbol
+                stock_request = StockQuotesRequest(
+                    symbol_or_symbols=underlying_symbol,
+                    limit=1
+                )
+                stock_quotes = self.data_client.get_stock_quotes(stock_request)
+                underlying_price = float(stock_quotes[underlying_symbol][0].ask_price) if underlying_symbol in stock_quotes else 0
+                
+                return {
+                    'contract_symbol': contract_symbol,
+                    'bid': float(quote.bid_price) if quote.bid_price else 0,
+                    'ask': float(quote.ask_price) if quote.ask_price else 0,
+                    'last': float((quote.bid_price + quote.ask_price) / 2) if quote.bid_price and quote.ask_price else 0,
+                    'mid_price': float((quote.bid_price + quote.ask_price) / 2) if quote.bid_price and quote.ask_price else 0,
+                    'volume': 0,  # Will be in snapshot if needed
+                    'open_interest': 0,  # Will be in snapshot if needed
+                    'implied_volatility': 0,  # Will be in snapshot if needed
+                    'timestamp': datetime.now(),
+                    'underlying_price': underlying_price
+                }
+            else:
+                logger.warning(f"No quote found for {contract_symbol}")
+                return None
+                
+        except ImportError:
+            logger.error("Alpaca options module not installed. Run: pip install alpaca-py>=0.15.0")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get option quote: {e}")
+            return None
     
     def get_positions(self) -> List[Dict]:
         """Get all positions"""
