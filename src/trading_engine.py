@@ -17,6 +17,10 @@ from src.database import DatabaseManager
 from src.broker_interface import BrokerInterface
 from src.mcp_broker import MCPBroker
 
+# Create logs directory if it doesn't exist
+import os
+os.makedirs('logs', exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

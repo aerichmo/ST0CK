@@ -54,6 +54,7 @@ jobs:
     - name: Run trading bot
       run: |
         echo "Starting trading bot with dynamic account balance..."
+        mkdir -p logs
         python main.py --mode paper
       env:
         PYTHONUNBUFFERED: 1
