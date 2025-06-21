@@ -1,14 +1,18 @@
 {
-  "name": "st0ck-tracker",
-  "version": "1.0.0",
-  "description": "Monthly tracking dashboard for ST0CK trading bot",
-  "main": "server.js",
+  "name": "st0ck-multi-dashboard",
+  "version": "2.0.0",
+  "description": "Multi-bot performance dashboard for ST0CK trading system",
+  "main": "server_multi.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server_multi.js",
+    "dev": "nodemon server_multi.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^21.0.0"
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

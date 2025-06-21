@@ -1,87 +1,188 @@
 const express = require('express');
 const path = require('path');
-const https = require('https');
+const { Client } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Monthly targets data - including test week
-const MONTHLY_TARGETS = {
-  "2025-06": { start: 5000, target: 5500, risk_pct: 20, actual: null }, // Test week
-  "2025-07": { start: 5000, target: 10512, risk_pct: 20, actual: null },
-  "2025-08": { start: 10512, target: 18239, risk_pct: 15, actual: null },
-  "2025-09": { start: 18239, target: 31645, risk_pct: 10, actual: null },
-  "2025-10": { start: 31645, target: 43275, risk_pct: 10, actual: null },
-  "2025-11": { start: 43275, target: 59178, risk_pct: 5, actual: null },
-  "2025-12": { start: 59178, target: 72227, risk_pct: 5, actual: null },
-  "2026-01": { start: 72227, target: 88153, risk_pct: 3, actual: null },
-  "2026-02": { start: 88153, target: 107590, risk_pct: 3, actual: null },
-  "2026-03": { start: 107590, target: 131314, risk_pct: 3, actual: null },
-  "2026-04": { start: 131314, target: 160269, risk_pct: 3, actual: null },
-  "2026-05": { start: 160269, target: 195608, risk_pct: 3, actual: null },
-  "2026-06": { start: 195608, target: 238739, risk_pct: 3, actual: null }
-};
+// Database connection
+const dbClient = new Client({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+
+// Connect to database on startup
+dbClient.connect().catch(err => {
+  console.error('Database connection error:', err);
+});
 
 // Serve static files
 app.use(express.static('public'));
+app.use(express.json());
 
-// API endpoint for monthly targets
-app.get('/api/targets', (req, res) => {
-  res.json(MONTHLY_TARGETS);
-});
-
-// API endpoint to update actual results (for future use)
-app.post('/api/update/:month', express.json(), (req, res) => {
-  const month = req.params.month;
-  const { actual } = req.body;
-  
-  if (MONTHLY_TARGETS[month]) {
-    MONTHLY_TARGETS[month].actual = actual;
-    res.json({ success: true, month, actual });
-  } else {
-    res.status(404).json({ error: 'Month not found' });
-  }
-});
-
-// API endpoint for trading statistics
-app.get('/api/stats', (req, res) => {
-  // TODO: Connect to database to fetch real trading statistics
-  // Returns empty stats until database connection is implemented
-  const stats = {
-    totalTrades: 0,
-    winningTrades: 0,
-    losingTrades: 0,
-    winRate: 0,
-    totalReturn: 0,
-    currentBalance: 5000  // Starting balance
-  };
-  
-  res.json(stats);
-});
-
-// API endpoint for SPY data (using Alpaca API)
-app.get('/api/spy-data', async (req, res) => {
+// Multi-bot API endpoints
+app.get('/api/multi-bot/stats', async (req, res) => {
   try {
-    // Alpaca API integration would go here
-    // Currently returns empty data until Alpaca integration is complete
-    res.json({ 
-      data: [], 
-      symbol: 'SPY',
-      message: 'Alpaca integration pending'
+    // Get stats for each bot
+    const st0ckgStats = await getBotStats('st0ckg');
+    const st0ckaStats = await getBotStats('st0cka');
+    
+    // Calculate combined stats
+    const combined = {
+      totalPnl: st0ckgStats.totalPnl + st0ckaStats.totalPnl,
+      totalReturn: ((st0ckgStats.totalPnl + st0ckaStats.totalPnl) / 15000) * 100, // 5k + 10k capital
+      totalTrades: st0ckgStats.totalTrades + st0ckaStats.totalTrades,
+      winRate: calculateCombinedWinRate(st0ckgStats, st0ckaStats),
+      activePositions: st0ckgStats.activePositions + st0ckaStats.activePositions,
+      totalCapital: 15000
+    };
+    
+    res.json({
+      combined,
+      st0ckg: st0ckgStats,
+      st0cka: st0ckaStats
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch SPY data' });
+    console.error('Error fetching multi-bot stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
 
-// Serve static files from public directory
-app.use(express.static('public'));
+app.get('/api/multi-bot/trades', async (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  
+  try {
+    const query = `
+      SELECT bot_id, position_id, symbol, contract_symbol as option_symbol, 
+             option_type, signal_type, entry_time, entry_price, 
+             contracts, exit_time, exit_price, exit_reason, 
+             realized_pnl, status
+      FROM trades
+      ORDER BY entry_time DESC
+      LIMIT $1
+    `;
+    
+    const result = await dbClient.query(query, [limit]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching trades:', error);
+    res.json([]);
+  }
+});
 
-// Serve the main page
+app.get('/api/multi-bot/performance/:bot_id', async (req, res) => {
+  const { bot_id } = req.params;
+  const days = parseInt(req.query.days) || 30;
+  
+  try {
+    const query = `
+      SELECT DATE(entry_time) as date, 
+             SUM(realized_pnl) as daily_pnl,
+             COUNT(*) as trades,
+             SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins
+      FROM trades
+      WHERE bot_id = $1 
+        AND entry_time >= CURRENT_DATE - INTERVAL '$2 days'
+        AND status = 'CLOSED'
+      GROUP BY DATE(entry_time)
+      ORDER BY date DESC
+    `;
+    
+    const result = await dbClient.query(query, [bot_id, days]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching performance:', error);
+    res.json([]);
+  }
+});
+
+// Helper function to get bot stats
+async function getBotStats(botId) {
+  try {
+    // Today's stats
+    const todayQuery = `
+      SELECT COUNT(*) as trades, 
+             COALESCE(SUM(realized_pnl), 0) as pnl,
+             SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins
+      FROM trades
+      WHERE bot_id = $1 
+        AND DATE(entry_time) = CURRENT_DATE
+        AND status = 'CLOSED'
+    `;
+    
+    const todayResult = await dbClient.query(todayQuery, [botId]);
+    const todayStats = todayResult.rows[0];
+    
+    // All-time stats
+    const allTimeQuery = `
+      SELECT COUNT(*) as total_trades,
+             COALESCE(SUM(realized_pnl), 0) as total_pnl,
+             SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as total_wins
+      FROM trades
+      WHERE bot_id = $1 AND status = 'CLOSED'
+    `;
+    
+    const allTimeResult = await dbClient.query(allTimeQuery, [botId]);
+    const allTimeStats = allTimeResult.rows[0];
+    
+    // Active positions
+    const activeQuery = `
+      SELECT COUNT(*) as active
+      FROM trades
+      WHERE bot_id = $1 AND status = 'OPEN'
+    `;
+    
+    const activeResult = await dbClient.query(activeQuery, [botId]);
+    const activePositions = activeResult.rows[0].active;
+    
+    // Capital based on bot
+    const capital = botId === 'st0ckg' ? 5000 : 10000;
+    
+    return {
+      todayPnl: parseFloat(todayStats.pnl) || 0,
+      todayTrades: parseInt(todayStats.trades) || 0,
+      totalPnl: parseFloat(allTimeStats.total_pnl) || 0,
+      totalTrades: parseInt(allTimeStats.total_trades) || 0,
+      winRate: allTimeStats.total_trades > 0 
+        ? (allTimeStats.total_wins / allTimeStats.total_trades * 100) 
+        : 0,
+      activePositions: parseInt(activePositions) || 0,
+      capital
+    };
+  } catch (error) {
+    console.error(`Error getting stats for ${botId}:`, error);
+    return {
+      todayPnl: 0,
+      todayTrades: 0,
+      totalPnl: 0,
+      totalTrades: 0,
+      winRate: 0,
+      activePositions: 0,
+      capital: botId === 'st0ckg' ? 5000 : 10000
+    };
+  }
+}
+
+function calculateCombinedWinRate(stats1, stats2) {
+  const totalTrades = stats1.totalTrades + stats2.totalTrades;
+  if (totalTrades === 0) return 0;
+  
+  const totalWins = (stats1.winRate / 100 * stats1.totalTrades) + 
+                    (stats2.winRate / 100 * stats2.totalTrades);
+  
+  return (totalWins / totalTrades) * 100;
+}
+
+// Serve the multi-bot dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', database: dbClient ? 'connected' : 'disconnected' });
+});
+
 app.listen(PORT, () => {
-  console.log(`ST0CK tracker running on port ${PORT}`);
+  console.log(`ST0CK Multi-Bot Dashboard running on port ${PORT}`);
 });
