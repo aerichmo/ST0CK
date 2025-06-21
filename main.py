@@ -23,8 +23,8 @@ def main():
     parser = argparse.ArgumentParser(description='Options Scalping Trading Engine')
     parser.add_argument('--mode', choices=['paper', 'live'], default='paper',
                       help='Trading mode (default: paper)')
-    parser.add_argument('--capital', type=float, default=100000,
-                      help='Initial trading capital (default: 100000)')
+    parser.add_argument('--capital', type=float, default=None,
+                      help='Initial trading capital (default: fetch from broker)')
     parser.add_argument('--db', type=str, 
                       default='postgresql://localhost/options_scalper',
                       help='Database connection string')
@@ -38,20 +38,38 @@ def main():
         broker = MCPBroker(mode=args.mode)
     elif args.mode == 'paper':
         logger.info("Starting with built-in PAPER TRADING broker")
-        broker = PaperTradingBroker(initial_capital=args.capital)
+        initial_capital = args.capital if args.capital else 100000
+        broker = PaperTradingBroker(initial_capital=initial_capital)
     else:
         logger.error("Live trading requires MCP broker. Use --broker mcp")
         sys.exit(1)
     
     try:
+        # Connect to broker first
+        if not broker.connect():
+            logger.error("Failed to connect to broker")
+            sys.exit(1)
+        
+        # Fetch actual account balance if not specified
+        if args.capital is None:
+            account_info = broker.get_account_info()
+            if account_info:
+                capital = account_info.get('buying_power', account_info.get('cash', 0))
+                logger.info(f"Fetched account balance: ${capital:,.2f}")
+            else:
+                logger.error("Failed to fetch account balance")
+                sys.exit(1)
+        else:
+            capital = args.capital
+        
         engine = TradingEngine(
             config=TRADING_CONFIG,
             broker=broker,
             db_connection_string=args.db,
-            initial_equity=args.capital
+            initial_equity=capital
         )
         
-        logger.info(f"Trading engine initialized with ${args.capital:,.2f} capital")
+        logger.info(f"Trading engine initialized with ${capital:,.2f} capital")
         logger.info("Press Ctrl+C to stop")
         
         engine.run_trading_loop()

@@ -33,6 +33,11 @@ class RiskManager:
         # Default to most conservative if somehow above all tiers
         return 0.03
     
+    def update_equity(self, new_equity: float):
+        """Update current equity from broker account info"""
+        self.current_equity = new_equity
+        logger.info(f"Risk manager equity updated to ${new_equity:,.2f}")
+    
     def calculate_position_size(self, option_price: float, stop_level: float, 
                               market_regime: Optional[Dict] = None) -> int:
         """Dynamic position sizing based on market conditions and account size"""

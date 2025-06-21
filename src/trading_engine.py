@@ -72,8 +72,25 @@ class TradingEngine:
         # Connect to broker
         self.broker.connect()
         
+        # Update account balance at session start
+        self.update_account_balance()
+        
         # Calculate opening range for SPY
         self.calculate_opening_ranges()
+    
+    def update_account_balance(self):
+        """Fetch and update current account balance from broker"""
+        try:
+            account_info = self.broker.get_account_info()
+            if account_info:
+                current_balance = account_info.get('buying_power', account_info.get('cash', 0))
+                logger.info(f"Updated account balance: ${current_balance:,.2f}")
+                # Update risk manager with current balance
+                self.risk_manager.update_equity(current_balance)
+            else:
+                logger.warning("Failed to fetch account balance")
+        except Exception as e:
+            logger.error(f"Error updating account balance: {e}")
         
     def calculate_opening_ranges(self):
         """Calculate opening range for SPY"""
@@ -459,6 +476,7 @@ class TradingEngine:
         last_signal_scan = 0
         last_position_monitor = 0
         last_risk_log = 0
+        last_balance_update = 0
         last_timing_mode = None
         
         while self.running:
@@ -493,6 +511,11 @@ class TradingEngine:
                 if current_time - last_risk_log >= intervals['risk_log']:
                     self.risk_manager.log_current_state()
                     last_risk_log = current_time
+                
+                # Update account balance every 5 minutes
+                if current_time - last_balance_update >= 300:  # 5 minutes
+                    self.update_account_balance()
+                    last_balance_update = current_time
                 
                 # Run scheduled tasks (session management)
                 schedule.run_pending()

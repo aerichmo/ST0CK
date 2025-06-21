@@ -49,12 +49,11 @@ jobs:
         echo "EMAIL_USERNAME=$EMAIL_USERNAME" >> .env
         echo "EMAIL_PASSWORD=$EMAIL_PASSWORD" >> .env
         echo "WEBHOOK_URL=$WEBHOOK_URL" >> .env
-        echo "INITIAL_CAPITAL=100000" >> .env
         echo "TRADING_MODE=paper" >> .env
     
     - name: Run trading bot
       run: |
-        python main.py --mode paper --capital 100000
+        python main.py --mode paper
       env:
         PYTHONUNBUFFERED: 1
     

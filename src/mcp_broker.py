@@ -154,7 +154,7 @@ class MCPBroker(BrokerInterface):
         quantity: int,
         order_type: str = "market",
         limit_price: Optional[float] = None
-    ) -> Optional[Order]:
+    ) -> Optional[str]:
         """Place an option order through MCP."""
         try:
             # Format the option symbol for Alpaca
@@ -175,17 +175,7 @@ class MCPBroker(BrokerInterface):
             
             if response and "order" in response:
                 order_data = response["order"]
-                return Order(
-                    id=order_data.get("id"),
-                    symbol=symbol,
-                    side=side,
-                    quantity=quantity,
-                    order_type=order_type,
-                    status=order_data.get("status", "pending"),
-                    filled_qty=order_data.get("filled_qty", 0),
-                    avg_fill_price=order_data.get("filled_avg_price"),
-                    created_at=datetime.now()
-                )
+                return order_data.get("id")
             
             return None
             
@@ -200,7 +190,7 @@ class MCPBroker(BrokerInterface):
         take_profit_price: float,
         stop_loss_price: float,
         position_id: Optional[str] = None
-    ) -> Optional[Dict[str, Order]]:
+    ) -> Optional[str]:
         """Place OCO (One-Cancels-Other) order through MCP."""
         try:
             # MCP doesn't have direct OCO support, so we'll place two orders
@@ -226,35 +216,20 @@ class MCPBroker(BrokerInterface):
                 stop_price=stop_loss_price
             )
             
-            orders = {}
+            tp_id = None
+            sl_id = None
             
             if tp_response and "order" in tp_response:
-                tp_data = tp_response["order"]
-                orders["take_profit"] = Order(
-                    id=tp_data.get("id"),
-                    symbol=symbol,
-                    side="sell",
-                    quantity=quantity,
-                    order_type="limit",
-                    status=tp_data.get("status", "pending"),
-                    limit_price=take_profit_price,
-                    created_at=datetime.now()
-                )
+                tp_id = tp_response["order"].get("id")
             
             if sl_response and "order" in sl_response:
-                sl_data = sl_response["order"]
-                orders["stop_loss"] = Order(
-                    id=sl_data.get("id"),
-                    symbol=symbol,
-                    side="sell",
-                    quantity=quantity,
-                    order_type="stop",
-                    status=sl_data.get("status", "pending"),
-                    stop_price=stop_loss_price,
-                    created_at=datetime.now()
-                )
+                sl_id = sl_response["order"].get("id")
             
-            return orders if len(orders) == 2 else None
+            # Return a composite ID for the OCO pair
+            if tp_id and sl_id:
+                return f"{tp_id}:{sl_id}"
+            
+            return None
             
         except Exception as e:
             logger.error(f"Failed to place OCO order: {e}")
@@ -270,24 +245,14 @@ class MCPBroker(BrokerInterface):
             logger.error(f"Failed to cancel order: {e}")
             return False
     
-    def get_order_status(self, order_id: str) -> Optional[Order]:
+    def get_order_status(self, order_id: str) -> Optional[Dict]:
         """Get order status through MCP."""
         try:
             response = self._call_mcp("get_order", order_id=order_id)
             
             if response and "order" in response:
                 order_data = response["order"]
-                return Order(
-                    id=order_data.get("id"),
-                    symbol=order_data.get("symbol"),
-                    side=order_data.get("side"),
-                    quantity=order_data.get("qty"),
-                    order_type=order_data.get("order_type"),
-                    status=order_data.get("status"),
-                    filled_qty=order_data.get("filled_qty", 0),
-                    avg_fill_price=order_data.get("filled_avg_price"),
-                    created_at=datetime.fromisoformat(order_data.get("created_at"))
-                )
+                return order_data
             
             return None
             
@@ -295,19 +260,20 @@ class MCPBroker(BrokerInterface):
             logger.error(f"Failed to get order status: {e}")
             return None
     
-    def get_account_info(self) -> Optional[AccountInfo]:
+    def get_account_info(self) -> Optional[Dict]:
         """Get account information through MCP."""
         try:
             response = self._call_mcp("get_account_info")
             
             if response and "account" in response:
                 account_data = response["account"]
-                return AccountInfo(
-                    buying_power=float(account_data.get("buying_power", 0)),
-                    cash=float(account_data.get("cash", 0)),
-                    portfolio_value=float(account_data.get("portfolio_value", 0)),
-                    positions=[]  # Positions would need separate call
-                )
+                return {
+                    "buying_power": float(account_data.get("buying_power", 0)),
+                    "cash": float(account_data.get("cash", 0)),
+                    "portfolio_value": float(account_data.get("portfolio_value", 0)),
+                    "account_value": float(account_data.get("portfolio_value", 0)),
+                    "initial_capital": float(account_data.get("cash", 0))
+                }
             
             return None
             
