@@ -274,53 +274,14 @@ class AlpacaBroker(BrokerInterface):
         """
         Get real-time option quote
         
-        Note: Alpaca options data requires additional subscription
-        For now, this returns mock data based on the underlying
+        Note: Alpaca does not yet support options data
         """
         if not self.connected:
             return None
             
-        try:
-            # TODO: When Alpaca options data is available, use it directly
-            # For now, get underlying stock quote and estimate option price
-            
-            # Extract underlying symbol (first 3 chars for SPY)
-            underlying = contract_symbol[:3]
-            
-            # Get stock quote
-            request = StockQuotesRequest(
-                symbol_or_symbols=underlying,
-                limit=1
-            )
-            quotes = self.data_client.get_stock_quotes(request)
-            
-            if not quotes or underlying not in quotes:
-                return None
-            
-            quote = quotes[underlying][0]
-            stock_price = float(quote.ask_price)
-            
-            # Very rough option pricing (replace with real data when available)
-            # This is just for testing - real options data needed for production
-            option_price = stock_price * 0.01  # 1% of stock price as placeholder
-            spread = option_price * 0.05  # 5% spread
-            
-            return {
-                'contract_symbol': contract_symbol,
-                'bid': round(option_price - spread/2, 2),
-                'ask': round(option_price + spread/2, 2),
-                'last': round(option_price, 2),
-                'mid_price': round(option_price, 2),
-                'volume': 1000,  # Mock volume
-                'open_interest': 5000,  # Mock OI
-                'implied_volatility': 0.25,  # Mock IV
-                'timestamp': datetime.now(),
-                'underlying_price': stock_price
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to get option quote: {e}")
-            return None
+        # Alpaca does not yet provide options quotes
+        logger.warning(f"Alpaca options quotes not available for {contract_symbol}")
+        return None
     
     def get_positions(self) -> List[Dict]:
         """Get all positions"""

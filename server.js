@@ -45,15 +45,15 @@ app.post('/api/update/:month', express.json(), (req, res) => {
 
 // API endpoint for trading statistics
 app.get('/api/stats', (req, res) => {
-  // This would connect to your database in production
-  // For now, return mock data
+  // TODO: Connect to database to fetch real trading statistics
+  // Returns empty stats until database connection is implemented
   const stats = {
     totalTrades: 0,
     winningTrades: 0,
     losingTrades: 0,
     winRate: 0,
     totalReturn: 0,
-    currentBalance: 5000
+    currentBalance: 5000  // Starting balance
   };
   
   res.json(stats);
@@ -62,28 +62,13 @@ app.get('/api/stats', (req, res) => {
 // API endpoint for SPY data (using Alpaca API)
 app.get('/api/spy-data', async (req, res) => {
   try {
-    // For demo purposes, return sample data
-    // In production, this would fetch from Alpaca
-    const now = Date.now() / 1000;
-    const data = [];
-    
-    // Generate 5-minute bars for the last trading day
-    for (let i = 78; i >= 0; i--) { // 78 five-minute bars in a trading day
-      const time = now - (i * 300); // 5 minutes = 300 seconds
-      const basePrice = 450 + Math.sin(i / 10) * 5;
-      const volatility = 0.001;
-      
-      data.push({
-        time: Math.floor(time),
-        open: basePrice + (Math.random() - 0.5) * volatility * basePrice,
-        high: basePrice + Math.random() * volatility * basePrice * 2,
-        low: basePrice - Math.random() * volatility * basePrice * 2,
-        close: basePrice + (Math.random() - 0.5) * volatility * basePrice,
-        volume: Math.floor(Math.random() * 1000000)
-      });
-    }
-    
-    res.json({ data, symbol: 'SPY' });
+    // Alpaca API integration would go here
+    // Currently returns empty data until Alpaca integration is complete
+    res.json({ 
+      data: [], 
+      symbol: 'SPY',
+      message: 'Alpaca integration pending'
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch SPY data' });
   }
