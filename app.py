@@ -3,8 +3,9 @@ import json
 
 app = Flask(__name__)
 
-# Monthly targets with actual field
+# Monthly targets with actual field - including test week
 MONTHLY_TARGETS = {
+    "2025-06": {"start": 5000, "target": 5500, "risk_pct": 20, "actual": None}, # Test week
     "2025-07": {"start": 5000, "target": 10512, "risk_pct": 20, "actual": None},
     "2025-08": {"start": 10512, "target": 18239, "risk_pct": 15, "actual": None},
     "2025-09": {"start": 18239, "target": 31645, "risk_pct": 10, "actual": None},

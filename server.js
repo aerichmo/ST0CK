@@ -5,8 +5,9 @@ const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Monthly targets data - with example actuals for demonstration
+// Monthly targets data - including test week
 const MONTHLY_TARGETS = {
+  "2025-06": { start: 5000, target: 5500, risk_pct: 20, actual: null }, // Test week
   "2025-07": { start: 5000, target: 10512, risk_pct: 20, actual: null },
   "2025-08": { start: 10512, target: 18239, risk_pct: 15, actual: null },
   "2025-09": { start: 18239, target: 31645, risk_pct: 10, actual: null },
@@ -40,6 +41,22 @@ app.post('/api/update/:month', express.json(), (req, res) => {
   } else {
     res.status(404).json({ error: 'Month not found' });
   }
+});
+
+// API endpoint for trading statistics
+app.get('/api/stats', (req, res) => {
+  // This would connect to your database in production
+  // For now, return mock data
+  const stats = {
+    totalTrades: 0,
+    winningTrades: 0,
+    losingTrades: 0,
+    winRate: 0,
+    totalReturn: 0,
+    currentBalance: 5000
+  };
+  
+  res.json(stats);
 });
 
 // API endpoint for SPY data (using Yahoo Finance API)

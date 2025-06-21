@@ -298,20 +298,20 @@
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value">$5,000</div>
-                <div class="stat-label">Starting Capital</div>
+                <div class="stat-value" id="current-month-progress">--</div>
+                <div class="stat-label">Current Month Progress</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">$238,739</div>
-                <div class="stat-label">Target (12 Months)</div>
+                <div class="stat-value" id="trend-to-target">--</div>
+                <div class="stat-label">Trend vs Target</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">4,675%</div>
+                <div class="stat-value" id="total-return">--</div>
                 <div class="stat-label">Total Return</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">60%</div>
-                <div class="stat-label">Required Win Rate</div>
+                <div class="stat-value" id="actual-win-rate">--</div>
+                <div class="stat-label">Actual Win Rate</div>
             </div>
         </div>
         
@@ -342,8 +342,104 @@
                 const targets = await response.json();
                 displayMonths(targets);
                 createCharts(targets);
+                updateStats(targets);
             } catch (error) {
                 console.error('Error loading targets:', error);
+            }
+        }
+        
+        // Update the stat cards with calculated metrics
+        function updateStats(targets) {
+            const now = new Date();
+            const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM format
+            
+            // Find current month data
+            let currentMonthData = null;
+            let currentMonthKey = null;
+            for (const [month, data] of Object.entries(targets)) {
+                if (month === currentMonth) {
+                    currentMonthData = data;
+                    currentMonthKey = month;
+                    break;
+                }
+            }
+            
+            // If current month not in targets, find the closest future month
+            if (!currentMonthData) {
+                const sortedMonths = Object.keys(targets).sort();
+                for (const month of sortedMonths) {
+                    if (month > currentMonth) {
+                        currentMonthData = targets[month];
+                        currentMonthKey = month;
+                        break;
+                    }
+                }
+            }
+            
+            // If still no data (before June 2025), use first month
+            if (!currentMonthData) {
+                const firstMonth = Object.keys(targets).sort()[0];
+                currentMonthData = targets[firstMonth];
+                currentMonthKey = firstMonth;
+            }
+            
+            // 1. Current Month Progress
+            if (currentMonthData) {
+                const actual = currentMonthData.actual || currentMonthData.start;
+                const target = currentMonthData.target;
+                const progressText = `$${actual.toLocaleString()} of $${target.toLocaleString()}`;
+                document.getElementById('current-month-progress').textContent = progressText;
+                
+                // 2. Trend vs Target (% of month target achieved)
+                const percentOfTarget = ((actual / target) * 100).toFixed(1);
+                const trendText = `${percentOfTarget}%`;
+                const trendElement = document.getElementById('trend-to-target');
+                trendElement.textContent = trendText;
+                // Color based on performance
+                if (percentOfTarget >= 100) {
+                    trendElement.style.color = '#0F9D58'; // Green
+                } else if (percentOfTarget >= 80) {
+                    trendElement.style.color = '#FFA000'; // Orange
+                } else {
+                    trendElement.style.color = '#EA4335'; // Red
+                }
+            }
+            
+            // 3. Total Return (including test week from June 23)
+            const testWeekStart = 5000; // Starting capital
+            let currentValue = testWeekStart;
+            
+            // Calculate actual returns from all months with data
+            for (const [month, data] of Object.entries(targets)) {
+                if (data.actual && data.actual > 0) {
+                    currentValue = data.actual;
+                }
+            }
+            
+            const totalReturn = ((currentValue - testWeekStart) / testWeekStart * 100).toFixed(1);
+            const returnElement = document.getElementById('total-return');
+            returnElement.textContent = totalReturn >= 0 ? `+${totalReturn}%` : `${totalReturn}%`;
+            returnElement.style.color = totalReturn >= 0 ? '#0F9D58' : '#EA4335';
+            
+            // 4. Actual Win Rate (will be calculated from trade data)
+            // For now, we'll simulate based on whether we're meeting targets
+            let wins = 0;
+            let totalTrades = 0;
+            
+            for (const [month, data] of Object.entries(targets)) {
+                if (data.actual && data.actual > 0) {
+                    totalTrades++;
+                    if (data.actual >= data.target * 0.9) { // 90% of target = win
+                        wins++;
+                    }
+                }
+            }
+            
+            if (totalTrades > 0) {
+                const winRate = (wins / totalTrades * 100).toFixed(0);
+                document.getElementById('actual-win-rate').textContent = `${winRate}%`;
+            } else {
+                document.getElementById('actual-win-rate').textContent = 'N/A';
             }
         }
         
@@ -548,10 +644,35 @@
             document.getElementById('current-month').textContent = currentMonth;
         }
         
+        // Fetch real trading stats from API
+        async function loadTradingStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                // Update win rate if we have real data
+                if (stats.totalTrades > 0) {
+                    const winRate = (stats.winningTrades / stats.totalTrades * 100).toFixed(0);
+                    document.getElementById('actual-win-rate').textContent = `${winRate}%`;
+                    
+                    // Update total return if available
+                    if (stats.totalReturn !== 0) {
+                        const returnElement = document.getElementById('total-return');
+                        returnElement.textContent = stats.totalReturn >= 0 ? `+${stats.totalReturn}%` : `${stats.totalReturn}%`;
+                        returnElement.style.color = stats.totalReturn >= 0 ? '#0F9D58' : '#EA4335';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading trading stats:', error);
+            }
+        }
+        
         // Initialize
         loadTargets();
         updateCountdown();
+        loadTradingStats();
         setInterval(updateCountdown, 60000); // Update every minute
+        setInterval(loadTradingStats, 30000); // Update stats every 30 seconds
     </script>
 </body>
 </html>
