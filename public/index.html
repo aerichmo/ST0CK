@@ -13,8 +13,8 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #FFFFFF;
-            color: #001E60;
+            background: #F8F9FA;
+            color: #202124;
             min-height: 100vh;
             padding: 20px;
         }
@@ -32,7 +32,7 @@
         .title {
             font-size: 48px;
             font-weight: 700;
-            background: linear-gradient(135deg, #0053E2, #4DBDF5);
+            background: linear-gradient(135deg, #1A73E8, #4285F4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
@@ -40,7 +40,7 @@
         
         .subtitle {
             font-size: 20px;
-            color: #A9DDF7;
+            color: #5F6368;
         }
         
         .stats-grid {
@@ -51,8 +51,8 @@
         }
         
         .stat-card {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 15px;
             padding: 25px;
             text-align: center;
@@ -61,19 +61,19 @@
         .stat-value {
             font-size: 36px;
             font-weight: 700;
-            color: #00ff88;
+            color: #1A73E8;
             margin-bottom: 5px;
         }
         
         .stat-label {
             font-size: 14px;
-            color: #A9DDF7;
+            color: #5F6368;
             text-transform: uppercase;
         }
         
         .progress-section {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 20px;
             padding: 30px;
             margin-bottom: 40px;
@@ -92,22 +92,22 @@
         }
         
         .month-card {
-            background: #0053E2;
-            border: 2px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 15px;
             padding: 20px;
             position: relative;
             overflow: hidden;
-            color: #FFFFFF;
+            color: #202124;
         }
         
         .month-card.active {
-            border-color: #00ff88;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            border-color: #1A73E8;
+            box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
         }
         
         .month-card.completed {
-            border-color: #4DBDF5;
+            border-color: #0F9D58;
         }
         
         .month-header {
@@ -120,12 +120,12 @@
         .month-name {
             font-size: 18px;
             font-weight: 600;
-            color: #FFFFFF;
+            color: #202124;
         }
         
         .risk-badge {
-            background: #A9DDF7;
-            color: #001E60;
+            background: #F8F9FA;
+            color: #202124;
             padding: 4px 10px;
             border-radius: 20px;
             font-size: 12px;
@@ -146,7 +146,7 @@
         }
         
         .progress-fill {
-            background: #00ff88;
+            background: #0F9D58;
             height: 100%;
             transition: width 0.3s ease;
             display: flex;
@@ -155,7 +155,7 @@
             padding-right: 5px;
             font-size: 12px;
             font-weight: 600;
-            color: #001E60;
+            color: #FFFFFF;
         }
         
         .month-values {
@@ -166,7 +166,7 @@
         }
         
         .value-box {
-            background: #A9DDF7;
+            background: #F8F9FA;
             border-radius: 8px;
             padding: 10px;
             text-align: center;
@@ -174,20 +174,20 @@
         
         .value-label {
             font-size: 12px;
-            color: #001E60;
+            color: #5F6368;
             text-transform: uppercase;
             margin-bottom: 5px;
-            font-weight: 600;
+            font-weight: 500;
         }
         
         .value-amount {
             font-size: 20px;
             font-weight: 700;
-            color: #001E60;
+            color: #202124;
         }
         
         .target-value {
-            color: #A9DDF7;
+            color: #5F6368;
         }
         
         .actual-value {
@@ -203,16 +203,16 @@
         }
         
         .chart-container {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 20px;
             padding: 30px;
             height: 400px;
         }
         
         .live-ticker {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 15px;
             padding: 15px;
             margin-bottom: 40px;
@@ -265,12 +265,12 @@
     </style>
 </head>
 <body>
-    <nav style="background: #0053E2; border-bottom: 1px solid #4DBDF5; padding: 15px 20px; position: sticky; top: 0; z-index: 100;">
+    <nav style="background: #FFFFFF; border-bottom: 1px solid #E8EAED; padding: 15px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
-            <a href="/" style="font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #0053E2, #4DBDF5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none;">ST0CK</a>
+            <a href="/" style="font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #1A73E8, #4285F4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none;">ST0CK</a>
             <div style="display: flex; gap: 30px;">
-                <a href="/" style="color: #00ff88; text-decoration: none;">Dashboard</a>
-                <a href="/charts.html" style="color: #A9DDF7; text-decoration: none; transition: color 0.3s;">Charts</a>
+                <a href="/" style="color: #1A73E8; text-decoration: none; font-weight: 500;">Dashboard</a>
+                <a href="/charts.html" style="color: #5F6368; text-decoration: none; transition: color 0.3s;">Charts</a>
             </div>
         </div>
     </nav>
@@ -386,8 +386,8 @@
                             </div>
                         </div>
                     </div>
-                    <div style="text-align: center; margin-top: 10px; color: #FFFFFF; font-size: 14px;">
-                        <span style="color: #A9DDF7;">Monthly Target:</span> +${getMonthlyReturn(data)}%
+                    <div style="text-align: center; margin-top: 10px; color: #202124; font-size: 14px;">
+                        <span style="color: #5F6368;">Monthly Target:</span> +${getMonthlyReturn(data)}%
                     </div>
                 `;
                 
@@ -426,21 +426,21 @@
                     datasets: [{
                         label: 'Goal',
                         data: goalValues,
-                        borderColor: '#0053E2',
-                        backgroundColor: 'rgba(0, 83, 226, 0.1)',
+                        borderColor: '#1A73E8',
+                        backgroundColor: 'rgba(26, 115, 232, 0.1)',
                         borderWidth: 3,
                         tension: 0.4,
                         pointRadius: 6,
-                        pointBackgroundColor: '#0053E2'
+                        pointBackgroundColor: '#1A73E8'
                     }, {
                         label: 'Actual',
                         data: actualValues,
-                        borderColor: '#00ff88',
-                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                        borderColor: '#0F9D58',
+                        backgroundColor: 'rgba(15, 157, 88, 0.1)',
                         borderWidth: 3,
                         tension: 0.4,
                         pointRadius: 6,
-                        pointBackgroundColor: '#00ff88',
+                        pointBackgroundColor: '#0F9D58',
                         borderDash: [5, 5]
                     }]
                 },
@@ -451,25 +451,25 @@
                         title: {
                             display: true,
                             text: 'Projected Account Growth',
-                            color: '#001E60'
+                            color: '#202124'
                         }
                     },
                     scales: {
                         y: {
                             ticks: {
                                 callback: value => '$' + value.toLocaleString(),
-                                color: '#001E60'
+                                color: '#202124'
                             },
                             grid: {
-                                color: '#A9DDF7'
+                                color: '#E8EAED'
                             }
                         },
                         x: {
                             ticks: {
-                                color: '#001E60'
+                                color: '#202124'
                             },
                             grid: {
-                                color: '#A9DDF7'
+                                color: '#E8EAED'
                             }
                         }
                     }
@@ -486,14 +486,14 @@
                     datasets: [{
                         label: 'Goal',
                         data: goalValues,
-                        backgroundColor: '#0053E2',
-                        borderColor: '#0053E2',
+                        backgroundColor: '#1A73E8',
+                        borderColor: '#1A73E8',
                         borderWidth: 2
                     }, {
                         label: 'Actual',
                         data: actualValues,
-                        backgroundColor: '#00ff88',
-                        borderColor: '#00ff88',
+                        backgroundColor: '#0F9D58',
+                        borderColor: '#0F9D58',
                         borderWidth: 2
                     }]
                 },
@@ -504,25 +504,25 @@
                         title: {
                             display: true,
                             text: 'Monthly Performance: Goal vs Actual',
-                            color: '#001E60'
+                            color: '#202124'
                         }
                     },
                     scales: {
                         y: {
                             ticks: {
-                                callback: value => value + '%',
-                                color: '#001E60'
+                                callback: value => '$' + value.toLocaleString(),
+                                color: '#202124'
                             },
                             grid: {
-                                color: '#A9DDF7'
+                                color: '#E8EAED'
                             }
                         },
                         x: {
                             ticks: {
-                                color: '#001E60'
+                                color: '#202124'
                             },
                             grid: {
-                                color: '#A9DDF7'
+                                color: '#E8EAED'
                             }
                         }
                     }

@@ -13,14 +13,14 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #FFFFFF;
-            color: #001E60;
+            background: #F8F9FA;
+            color: #202124;
             min-height: 100vh;
         }
         
         .navbar {
-            background: #0053E2;
-            border-bottom: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border-bottom: 1px solid #E8EAED;
             padding: 15px 20px;
             position: sticky;
             top: 0;
@@ -38,7 +38,7 @@
         .nav-brand {
             font-size: 24px;
             font-weight: 700;
-            background: linear-gradient(135deg, #0053E2, #4DBDF5);
+            background: linear-gradient(135deg, #1A73E8, #4285F4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-decoration: none;
@@ -51,13 +51,13 @@
         }
         
         .nav-link {
-            color: #A9DDF7;
+            color: #5F6368;
             text-decoration: none;
             transition: color 0.3s;
         }
         
         .nav-link:hover, .nav-link.active {
-            color: #00ff88;
+            color: #1A73E8;
         }
         
         .container {
@@ -67,8 +67,8 @@
         }
         
         .ticker-bar {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 20px;
@@ -98,12 +98,12 @@
             font-size: 14px;
         }
         
-        .positive { color: #00ff88; }
-        .negative { color: #ff4444; }
+        .positive { color: #0F9D58; }
+        .negative { color: #EA4335; }
         
         .chart-container {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
@@ -119,7 +119,7 @@
         .chart-title {
             font-size: 20px;
             font-weight: 600;
-            color: #001E60;
+            color: #202124;
         }
         
         .timeframe-selector {
@@ -128,9 +128,9 @@
         }
         
         .timeframe-btn {
-            background: #4DBDF5;
-            border: 1px solid #4DBDF5;
-            color: #A9DDF7;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
+            color: #5F6368;
             padding: 5px 15px;
             border-radius: 5px;
             cursor: pointer;
@@ -138,14 +138,14 @@
         }
         
         .timeframe-btn:hover {
-            border-color: #00ff88;
-            color: #fff;
+            border-color: #1A73E8;
+            color: #1A73E8;
         }
         
         .timeframe-btn.active {
-            background: #00ff88;
-            color: #001E60;
-            border-color: #00ff88;
+            background: #1A73E8;
+            color: #FFFFFF;
+            border-color: #1A73E8;
         }
         
         #mainChart {
@@ -154,8 +154,8 @@
         }
         
         .indicators-panel {
-            background: #001E60;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 10px;
             padding: 15px;
             margin-top: 20px;
@@ -164,14 +164,14 @@
         .indicators-title {
             font-size: 16px;
             margin-bottom: 15px;
-            color: #00ff88;
+            color: #1A73E8;
         }
         
         .indicator-row {
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px solid #4DBDF5;
+            border-bottom: 1px solid #E8EAED;
         }
         
         .indicator-row:last-child {
@@ -179,7 +179,7 @@
         }
         
         .indicator-label {
-            color: #A9DDF7;
+            color: #5F6368;
         }
         
         .indicator-value {
@@ -194,14 +194,14 @@
         }
         
         .info-card {
-            background: #0053E2;
-            border: 1px solid #4DBDF5;
+            background: #FFFFFF;
+            border: 1px solid #E8EAED;
             border-radius: 10px;
             padding: 20px;
         }
         
         .info-card h3 {
-            color: #00ff88;
+            color: #1A73E8;
             margin-bottom: 15px;
             font-size: 18px;
         }
@@ -210,11 +210,11 @@
             display: flex;
             justify-content: space-between;
             padding: 5px 0;
-            color: #A9DDF7;
+            color: #5F6368;
         }
         
         .info-value {
-            color: #fff;
+            color: #202124;
             font-weight: 500;
         }
         
@@ -368,28 +368,28 @@
                 textColor: '#001E60',
             },
             grid: {
-                vertLines: { color: '#4DBDF5' },
-                horzLines: { color: '#4DBDF5' },
+                vertLines: { color: '#E8EAED' },
+                horzLines: { color: '#E8EAED' },
             },
             crosshair: {
                 mode: LightweightCharts.CrosshairMode.Normal,
             },
             timeScale: {
-                borderColor: '#4DBDF5',
+                borderColor: '#E8EAED',
                 timeVisible: true,
                 secondsVisible: false,
             },
             rightPriceScale: {
-                borderColor: '#4DBDF5',
+                borderColor: '#E8EAED',
             },
         });
 
         const candlestickSeries = chart.addCandlestickSeries({
-            upColor: '#00ff88',
-            downColor: '#ff4444',
+            upColor: '#0F9D58',
+            downColor: '#EA4335',
             borderVisible: false,
-            wickUpColor: '#00ff88',
-            wickDownColor: '#ff4444',
+            wickUpColor: '#0F9D58',
+            wickDownColor: '#EA4335',
         });
 
         const volumeSeries = chart.addHistogramSeries({
@@ -405,27 +405,27 @@
         });
 
         const ema8Series = chart.addLineSeries({
-            color: '#4DBDF5',
+            color: '#1A73E8',
             lineWidth: 2,
             title: 'EMA 8',
         });
 
         const ema21Series = chart.addLineSeries({
-            color: '#ffaa00',
+            color: '#FFA000',
             lineWidth: 2,
             title: 'EMA 21',
         });
 
         // OR levels
         const orHighLine = chart.addLineSeries({
-            color: '#00ff88',
+            color: '#0F9D58',
             lineWidth: 1,
             lineStyle: 2,
             title: 'OR High',
         });
 
         const orLowLine = chart.addLineSeries({
-            color: '#ff4444',
+            color: '#EA4335',
             lineWidth: 1,
             lineStyle: 2,
             title: 'OR Low',
