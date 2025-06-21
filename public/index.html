@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ST0CK - Monthly Performance Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .title {
+            font-size: 48px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 20px;
+            color: #666;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #00ff88;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .progress-section {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .progress-header {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .month-tracker {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .month-card {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .month-card.active {
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .month-card.completed {
+            border-color: #00aaff;
+        }
+        
+        .month-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .month-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .risk-badge {
+            background: #333;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .month-progress {
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            background: #222;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #00ff88, #00aaff);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        
+        .month-values {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        
+        .target-value {
+            color: #666;
+        }
+        
+        .actual-value {
+            color: #00ff88;
+            font-weight: 600;
+        }
+        
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-container {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 30px;
+            height: 400px;
+        }
+        
+        .live-ticker {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+        }
+        
+        .ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .ticker-symbol {
+            font-weight: 600;
+            color: #00aaff;
+        }
+        
+        .ticker-price {
+            font-size: 18px;
+        }
+        
+        .ticker-change {
+            font-size: 14px;
+        }
+        
+        .positive {
+            color: #00ff88;
+        }
+        
+        .negative {
+            color: #ff4444;
+        }
+        
+        @media (max-width: 768px) {
+            .title {
+                font-size: 36px;
+            }
+            
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .month-tracker {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">ST0CK Performance Tracker</h1>
+            <p class="subtitle">$5K → $100K Challenge Progress</p>
+        </div>
+        
+        <div class="live-ticker" id="ticker">
+            <div class="ticker-item">
+                <span class="ticker-symbol">SPY</span>
+                <span class="ticker-price">--</span>
+                <span class="ticker-change">--</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-symbol">Current Month</span>
+                <span class="ticker-price" id="current-month">--</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-symbol">Days Until Start</span>
+                <span class="ticker-price" id="countdown">--</span>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">$5,000</div>
+                <div class="stat-label">Starting Capital</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">$238,739</div>
+                <div class="stat-label">Target (12 Months)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">4,675%</div>
+                <div class="stat-label">Total Return</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">60%</div>
+                <div class="stat-label">Required Win Rate</div>
+            </div>
+        </div>
+        
+        <div class="progress-section">
+            <h2 class="progress-header">Monthly Performance Targets</h2>
+            <div class="month-tracker" id="monthTracker">
+                <!-- Months will be populated by JavaScript -->
+            </div>
+        </div>
+        
+        <div class="charts-section">
+            <div class="chart-container">
+                <canvas id="growthChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="riskChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Fetch and display monthly targets
+        async function loadTargets() {
+            try {
+                const response = await fetch('/api/targets');
+                const targets = await response.json();
+                displayMonths(targets);
+                createCharts(targets);
+            } catch (error) {
+                console.error('Error loading targets:', error);
+            }
+        }
+        
+        function displayMonths(targets) {
+            const container = document.getElementById('monthTracker');
+            const currentDate = new Date();
+            
+            for (const [month, data] of Object.entries(targets)) {
+                const monthDate = new Date(month + '-01');
+                const isActive = currentDate >= monthDate && currentDate < new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
+                const isCompleted = currentDate > new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+                
+                const monthCard = document.createElement('div');
+                monthCard.className = `month-card ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`;
+                
+                const progress = data.actual ? ((data.actual - data.start) / (data.target - data.start)) * 100 : 0;
+                
+                monthCard.innerHTML = `
+                    <div class="month-header">
+                        <span class="month-name">${formatMonth(month)}</span>
+                        <span class="risk-badge" style="background: ${getRiskColor(data.risk_pct)}">${data.risk_pct}% Risk</span>
+                    </div>
+                    <div class="month-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="month-values">
+                            <span class="target-value">Target: $${data.target.toLocaleString()}</span>
+                            <span class="actual-value">${data.actual ? `$${data.actual.toLocaleString()}` : 'Pending'}</span>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 10px; color: #666;">
+                        ${getMonthlyReturn(data)}% monthly return
+                    </div>
+                `;
+                
+                container.appendChild(monthCard);
+            }
+        }
+        
+        function formatMonth(monthStr) {
+            const date = new Date(monthStr + '-01');
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }
+        
+        function getRiskColor(risk) {
+            if (risk >= 20) return '#ff4444';
+            if (risk >= 15) return '#ff8844';
+            if (risk >= 10) return '#ffaa44';
+            if (risk >= 5) return '#44aaff';
+            return '#44ff88';
+        }
+        
+        function getMonthlyReturn(data) {
+            return Math.round(((data.target / data.start) - 1) * 100);
+        }
+        
+        function createCharts(targets) {
+            // Growth Chart
+            const growthCtx = document.getElementById('growthChart').getContext('2d');
+            const months = Object.keys(targets);
+            const values = months.map(m => targets[m].target);
+            
+            new Chart(growthCtx, {
+                type: 'line',
+                data: {
+                    labels: months.map(m => formatMonth(m)),
+                    datasets: [{
+                        label: 'Account Value',
+                        data: values,
+                        borderColor: '#00ff88',
+                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Projected Account Growth',
+                            color: '#fff'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: value => '$' + value.toLocaleString(),
+                                color: '#666'
+                            },
+                            grid: {
+                                color: '#333'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#666'
+                            },
+                            grid: {
+                                color: '#333'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Risk Chart
+            const riskCtx = document.getElementById('riskChart').getContext('2d');
+            const riskValues = months.map(m => targets[m].risk_pct);
+            
+            new Chart(riskCtx, {
+                type: 'bar',
+                data: {
+                    labels: months.map(m => formatMonth(m)),
+                    datasets: [{
+                        label: 'Risk Per Trade (%)',
+                        data: riskValues,
+                        backgroundColor: months.map(m => getRiskColor(targets[m].risk_pct))
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Risk Management Schedule',
+                            color: '#fff'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: value => value + '%',
+                                color: '#666'
+                            },
+                            grid: {
+                                color: '#333'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#666'
+                            },
+                            grid: {
+                                color: '#333'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update countdown
+        function updateCountdown() {
+            const startDate = new Date('2025-07-01');
+            const now = new Date();
+            const diff = startDate - now;
+            
+            if (diff > 0) {
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                document.getElementById('countdown').textContent = `${days} days`;
+            } else {
+                document.getElementById('countdown').textContent = 'Active';
+            }
+            
+            // Update current month
+            const currentMonth = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            document.getElementById('current-month').textContent = currentMonth;
+        }
+        
+        // Initialize
+        loadTargets();
+        updateCountdown();
+        setInterval(updateCountdown, 60000); // Update every minute
+    </script>
+</body>
+</html>
