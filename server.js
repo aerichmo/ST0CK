@@ -5,7 +5,7 @@ const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Monthly targets data
+// Monthly targets data - with example actuals for demonstration
 const MONTHLY_TARGETS = {
   "2025-07": { start: 5000, target: 10512, risk_pct: 20, actual: null },
   "2025-08": { start: 10512, target: 18239, risk_pct: 15, actual: null },

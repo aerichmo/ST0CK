@@ -98,6 +98,7 @@
             padding: 20px;
             position: relative;
             overflow: hidden;
+            color: #FFFFFF;
         }
         
         .month-card.active {
@@ -119,6 +120,7 @@
         .month-name {
             font-size: 18px;
             font-weight: 600;
+            color: #FFFFFF;
         }
         
         .risk-badge {
@@ -135,23 +137,52 @@
         }
         
         .progress-bar {
-            background: #4DBDF5;
-            height: 8px;
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            height: 20px;
+            border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            position: relative;
         }
         
         .progress-fill {
-            background: linear-gradient(90deg, #00ff88, #4DBDF5);
+            background: #00ff88;
             height: 100%;
             transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #001E60;
         }
         
         .month-values {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .value-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .value-label {
+            font-size: 12px;
+            color: #A9DDF7;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .value-amount {
+            font-size: 20px;
+            font-weight: 700;
+            color: #FFFFFF;
         }
         
         .target-value {
@@ -329,6 +360,9 @@
                 
                 const progress = data.actual ? ((data.actual - data.start) / (data.target - data.start)) * 100 : 0;
                 
+                const actualAmount = data.actual || 0;
+                const progressText = actualAmount > 0 ? `${Math.round(progress)}%` : '';
+                
                 monthCard.innerHTML = `
                     <div class="month-header">
                         <span class="month-name">${formatMonth(month)}</span>
@@ -336,15 +370,23 @@
                     </div>
                     <div class="month-progress">
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${progress}%"></div>
+                            <div class="progress-fill" style="width: ${progress}%">${progressText}</div>
                         </div>
                         <div class="month-values">
-                            <span class="target-value">Target: $${data.target.toLocaleString()}</span>
-                            <span class="actual-value">${data.actual ? `$${data.actual.toLocaleString()}` : 'Pending'}</span>
+                            <div class="value-box">
+                                <div class="value-label">Goal</div>
+                                <div class="value-amount">$${data.target.toLocaleString()}</div>
+                            </div>
+                            <div class="value-box">
+                                <div class="value-label">Actual</div>
+                                <div class="value-amount" style="color: ${actualAmount > 0 ? '#00ff88' : '#A9DDF7'}">
+                                    ${actualAmount > 0 ? `$${actualAmount.toLocaleString()}` : 'Pending'}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div style="text-align: center; margin-top: 10px; color: #A9DDF7;">
-                        ${getMonthlyReturn(data)}% monthly return
+                    <div style="text-align: center; margin-top: 10px; color: #FFFFFF; font-size: 14px;">
+                        <span style="color: #A9DDF7;">Monthly Target:</span> +${getMonthlyReturn(data)}%
                     </div>
                 `;
                 
@@ -370,21 +412,35 @@
         }
         
         function createCharts(targets) {
-            // Growth Chart
+            // Growth Chart - Show Goals vs Actuals
             const growthCtx = document.getElementById('growthChart').getContext('2d');
             const months = Object.keys(targets);
-            const values = months.map(m => targets[m].target);
+            const goalValues = months.map(m => targets[m].target);
+            const actualValues = months.map(m => targets[m].actual || null);
             
             new Chart(growthCtx, {
                 type: 'line',
                 data: {
                     labels: months.map(m => formatMonth(m)),
                     datasets: [{
-                        label: 'Account Value',
-                        data: values,
+                        label: 'Goal',
+                        data: goalValues,
+                        borderColor: '#0053E2',
+                        backgroundColor: 'rgba(0, 83, 226, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#0053E2'
+                    }, {
+                        label: 'Actual',
+                        data: actualValues,
                         borderColor: '#00ff88',
                         backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                        tension: 0.4
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#00ff88',
+                        borderDash: [5, 5]
                     }]
                 },
                 options: {
@@ -419,18 +475,25 @@
                 }
             });
             
-            // Risk Chart
+            // Performance Chart - Bar chart showing goal vs actual
             const riskCtx = document.getElementById('riskChart').getContext('2d');
-            const riskValues = months.map(m => targets[m].risk_pct);
             
             new Chart(riskCtx, {
                 type: 'bar',
                 data: {
                     labels: months.map(m => formatMonth(m)),
                     datasets: [{
-                        label: 'Risk Per Trade (%)',
-                        data: riskValues,
-                        backgroundColor: months.map(m => getRiskColor(targets[m].risk_pct))
+                        label: 'Goal',
+                        data: goalValues,
+                        backgroundColor: '#0053E2',
+                        borderColor: '#0053E2',
+                        borderWidth: 2
+                    }, {
+                        label: 'Actual',
+                        data: actualValues,
+                        backgroundColor: '#00ff88',
+                        borderColor: '#00ff88',
+                        borderWidth: 2
                     }]
                 },
                 options: {
@@ -439,7 +502,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Risk Management Schedule',
+                            text: 'Monthly Performance: Goal vs Actual',
                             color: '#001E60'
                         }
                     },
