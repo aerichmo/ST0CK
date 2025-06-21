@@ -86,6 +86,30 @@ class BatchedDatabaseManager:
         else:
             # Force IPv4 for Supabase connections
             if 'supabase.co' in connection_string:
+                # Parse and rebuild connection string to force IPv4
+                import socket
+                from urllib.parse import urlparse, urlunparse
+                
+                parsed = urlparse(connection_string)
+                hostname = parsed.hostname
+                
+                # Resolve to IPv4 address
+                try:
+                    ipv4_addr = socket.gethostbyname(hostname)
+                    # Replace hostname with IPv4 address
+                    netloc = parsed.netloc.replace(hostname, ipv4_addr)
+                    connection_string = urlunparse((
+                        parsed.scheme,
+                        netloc,
+                        parsed.path,
+                        parsed.params,
+                        parsed.query,
+                        parsed.fragment
+                    ))
+                    logger.info(f"Using IPv4 address for database: {ipv4_addr}")
+                except Exception as e:
+                    logger.warning(f"Could not resolve to IPv4: {e}")
+                
                 # Add connect_args to force IPv4
                 self.engine = create_engine(
                     connection_string,
