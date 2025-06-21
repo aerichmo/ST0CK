@@ -32,6 +32,22 @@ jobs:
         pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Install Alpaca MCP Server
+      run: |
+        git clone https://github.com/alpacahq/alpaca-mcp-server.git ~/alpaca-mcp-server || true
+        cd ~/alpaca-mcp-server
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          echo "Warning: MCP server requirements.txt not found"
+        fi
+        # Create MCP config
+        cat > .env << EOF
+        ALPACA_API_KEY=${{ secrets.ALPACA_API_KEY }}
+        ALPACA_SECRET_KEY=${{ secrets.ALPACA_API_SECRET }}
+        PAPER=True
+        EOF
+    
     - name: Configure environment
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
