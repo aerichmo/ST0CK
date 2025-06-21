@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -38,6 +39,36 @@ app.post('/api/update/:month', express.json(), (req, res) => {
     res.json({ success: true, month, actual });
   } else {
     res.status(404).json({ error: 'Month not found' });
+  }
+});
+
+// API endpoint for SPY data (using Yahoo Finance API)
+app.get('/api/spy-data', async (req, res) => {
+  try {
+    // For demo purposes, return sample data
+    // In production, this would fetch from Yahoo Finance or Alpaca
+    const now = Date.now() / 1000;
+    const data = [];
+    
+    // Generate 5-minute bars for the last trading day
+    for (let i = 78; i >= 0; i--) { // 78 five-minute bars in a trading day
+      const time = now - (i * 300); // 5 minutes = 300 seconds
+      const basePrice = 450 + Math.sin(i / 10) * 5;
+      const volatility = 0.001;
+      
+      data.push({
+        time: Math.floor(time),
+        open: basePrice + (Math.random() - 0.5) * volatility * basePrice,
+        high: basePrice + Math.random() * volatility * basePrice * 2,
+        low: basePrice - Math.random() * volatility * basePrice * 2,
+        close: basePrice + (Math.random() - 0.5) * volatility * basePrice,
+        volume: Math.floor(Math.random() * 1000000)
+      });
+    }
+    
+    res.json({ data, symbol: 'SPY' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch SPY data' });
   }
 });
 
