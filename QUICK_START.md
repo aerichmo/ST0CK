@@ -1,9 +1,9 @@
-# ST0CK Multi-Bot Quick Start Guide
+# APEX Trading System Quick Start Guide
 
 ## Prerequisites
 - Python 3.8+
-- Alpaca Paper Trading Account(s)
-- PostgreSQL or SQLite database
+- Alpaca Paper Trading Account
+- SQLite database (automatic)
 
 ## 1. Clone and Setup
 
@@ -21,97 +21,72 @@ chmod +x deploy.sh
 
 Create/edit `.env` file:
 ```bash
-# Alpaca API Keys (from your saved secrets)
-STOCKG_KEY=your-stockg-key
-ST0CKG_SECRET=your-stockg-secret
-STOCKA_KEY=your-stocka-key
-ST0CKA_SECRET=your-stocka-secret
+# Alpaca API Keys
+STOCKG_KEY=your-alpaca-api-key
+ST0CKG_SECRET=your-alpaca-secret
 ALPACA_BASE_URL=https://api.alpaca.markets
 
 # Trading Capital
-ST0CKG_TRADING_CAPITAL=5000
-ST0CKA_TRADING_CAPITAL=10000
+APEX_TRADING_CAPITAL=5000
 
-# Database (use PostgreSQL for production)
-DATABASE_URL=postgresql://user:pass@host/dbname
-# or for local testing:
-# DATABASE_URL=sqlite:///trading_multi.db
+# Database (SQLite by default)
+DATABASE_URL=sqlite:///trading_multi.db
 ```
 
 ## 3. Test Configuration
 
 ```bash
-# Check environment
-python3 test_env.py
-
 # List registered bots
 python3 main_multi.py --list
 ```
 
-## 4. Run Manually
+## 4. Run the APEX Bot
 
 ```bash
-# Run ST0CKG (Opening Range Breakout)
-python3 main_multi.py st0ckg
-
-# Run ST0CKA (when implemented)
-python3 main_multi.py st0cka
+# Run APEX strategy
+python3 main_multi.py apex
 ```
 
-## 5. Deploy to GitHub Actions
+## 5. Monitor Performance
 
-### Add GitHub Secrets:
-Go to Settings → Secrets → Actions and add:
-
-- `ALPACA_BASE_URL` - https://api.alpaca.markets
-- `DATABASE_URL` - Your PostgreSQL connection string
-- `STOCKG_KEY` - ST0CKG API key
-- `ST0CKG_SECRET` - ST0CKG secret
-- `ST0CKG_TRADING_CAPITAL` - 5000
-- `STOCKA_KEY` - ST0CKA API key
-- `ST0CKA_SECRET` - ST0CKA secret
-- `ST0CKA_TRADING_CAPITAL` - 10000
-
-### Enable Workflows:
-1. Go to Actions tab
-2. Enable workflows
-3. ST0CKG will run automatically at 9:25 AM ET
-4. ST0CKA can be triggered manually
-
-## 6. Monitor Performance
+### View Performance Dashboard:
+- Yearly Overview: https://st0ck.onrender.com/
+- Monthly Details: https://st0ck.onrender.com/st0ckg
 
 ### Database Queries:
 ```sql
 -- Today's trades
 SELECT * FROM trades 
-WHERE bot_id = 'st0ckg' 
+WHERE bot_id = 'apex' 
 AND DATE(entry_time) = CURRENT_DATE;
 
--- Bot performance
-SELECT bot_id, COUNT(*) as trades, SUM(realized_pnl) as total_pnl
+-- Overall performance
+SELECT COUNT(*) as total_trades, 
+       SUM(realized_pnl) as total_pnl,
+       AVG(realized_pnl) as avg_pnl
 FROM trades
-WHERE status = 'CLOSED'
-GROUP BY bot_id;
+WHERE bot_id = 'apex' 
+AND status = 'CLOSED';
 ```
 
 ### Logs:
 - Local: `logs/multi_bot_YYYYMMDD.log`
-- GitHub Actions: Check workflow runs
+
+## Trading Schedule
+- **Trading Window**: 9:30-11:00 AM ET
+- **Focus**: Morning momentum and VWAP reversions
+- **Max Daily Trades**: 5
+- **Risk Per Trade**: 3.5%
 
 ## Troubleshooting
 
 ### Bot not trading?
-1. Check market hours (9:40-10:30 AM ET for ST0CKG)
-2. Verify API credentials: `python3 test_env.py`
+1. Check market hours (9:30-11:00 AM ET)
+2. Verify API credentials are correct
 3. Check logs for errors
 4. Ensure sufficient buying power in Alpaca account
 
-### Database errors?
-1. Run migration: `psql $DATABASE_URL < migrations/add_multi_bot_support.sql`
-2. Check connection string format
-3. Verify bot_id columns exist
-
 ### Need help?
-- Check `MULTI_BOT_SETUP.md` for detailed setup
-- Review bot strategy in `bots/st0ckg/strategy.py`
-- Check GitHub Actions logs for automated runs
+- Check `APEX_QUICK_REFERENCE.md` for strategy details
+- Review bot strategy in `bots/apex/strategy.py`
+- View performance metrics at dashboard URLs above

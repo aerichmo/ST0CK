@@ -1,17 +1,17 @@
--- Migration: Add multi-bot support to ST0CK database
+-- Migration: Add APEX bot support to ST0CK database
 -- This migration adds bot_id columns to existing tables and creates a bot registry
 
 -- Add bot_id to trades table with default for existing data
 ALTER TABLE trades 
-ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'st0ckg';
+ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'apex';
 
 -- Add bot_id to execution_logs table
 ALTER TABLE execution_logs 
-ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'st0ckg';
+ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'apex';
 
 -- Add bot_id to risk_metrics table
 ALTER TABLE risk_metrics 
-ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'st0ckg';
+ADD COLUMN bot_id VARCHAR(50) NOT NULL DEFAULT 'apex';
 
 -- Create bot registry table
 CREATE TABLE IF NOT EXISTS bot_registry (
@@ -31,13 +31,11 @@ CREATE INDEX idx_execution_logs_bot_id ON execution_logs(bot_id);
 CREATE INDEX idx_risk_metrics_bot_id ON risk_metrics(bot_id);
 CREATE INDEX idx_trades_bot_timestamp ON trades(bot_id, timestamp);
 
--- Insert initial bot configurations
+-- Insert APEX bot configuration
 INSERT INTO bot_registry (bot_id, bot_name, strategy_type, alpaca_account, config) 
 VALUES 
-    ('st0ckg', 'ST0CK-G Opening Range Breakout', 'opening_range_breakout', 'primary', 
-     '{"trading_window": {"start": "09:40", "end": "10:30"}, "position_sizing": {"max_risk_per_trade": 0.02}}'),
-    ('st0cka', 'ST0CK-A [Strategy TBD]', 'tbd', 'secondary', 
-     '{"active": false}')
+    ('apex', 'APEX Simplified Strategy', 'momentum_vwap_reversion', 'primary', 
+     '{"trading_window": {"start": "09:30", "end": "11:00"}, "position_sizing": {"risk_per_trade": 0.035}}')
 ON CONFLICT (bot_id) DO NOTHING;
 
 -- Create a view for bot-specific trades
