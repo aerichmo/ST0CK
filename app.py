@@ -29,8 +29,13 @@ def get_db_connection():
 # Serve static files
 @app.route('/')
 def index():
-    """Serve the main dashboard"""
+    """Serve the yearly dashboard"""
     return send_from_directory('public', 'index.html')
+
+@app.route('/st0ckg')
+def monthly():
+    """Serve the monthly dashboard"""
+    return send_from_directory('public', 'monthly.html')
 
 @app.route('/health')
 def health():
@@ -124,6 +129,89 @@ def get_performance():
             'cumulativeCapital': cumulative_capital,
             'winRate': win_rate,
             'totalTrades': total_trades
+        })
+        
+    except Exception as e:
+        # Return demo data if database not available
+        app.logger.error(f"Database error: {e}")
+        return jsonify({
+            'demo': True,
+            'message': 'Using demo data'
+        })
+
+@app.route('/api/performance/yearly')
+def get_yearly_performance():
+    """Get APEX yearly performance data"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get monthly aggregated data for current year
+        current_year = datetime.now().strftime('%Y')
+        query = """
+            SELECT 
+                strftime('%m', entry_time) as month,
+                SUM(realized_pnl) as monthly_pnl,
+                COUNT(*) as trade_count,
+                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins
+            FROM trades
+            WHERE bot_id = 'apex'
+            AND strftime('%Y', entry_time) = ?
+            AND status = 'CLOSED'
+            GROUP BY strftime('%m', entry_time)
+            ORDER BY month
+        """
+        
+        cursor.execute(query, (current_year,))
+        results = cursor.fetchall()
+        
+        # Create a dict of actual results by month
+        results_dict = {}
+        for row in results:
+            month_num = int(row[0]) - 1  # Convert to 0-indexed
+            results_dict[month_num] = {
+                'pnl': float(row[1]) if row[1] else 0,
+                'trades': row[2],
+                'wins': row[3]
+            }
+        
+        # Generate full year data
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        monthlyPnL = []
+        cumulativeCapital = []
+        monthlyReturns = []
+        capital = 5000  # Starting capital
+        
+        current_month = datetime.now().month - 1  # 0-indexed
+        
+        for i in range(12):
+            if i in results_dict:
+                # We have data for this month
+                pnl = results_dict[i]['pnl']
+                monthlyPnL.append(pnl)
+                previous_capital = capital
+                capital += pnl
+                cumulativeCapital.append(capital)
+                monthly_return = (pnl / previous_capital) * 100 if previous_capital > 0 else 0
+                monthlyReturns.append(monthly_return)
+            elif i <= current_month:
+                # Past month with no trades
+                monthlyPnL.append(0)
+                cumulativeCapital.append(capital)
+                monthlyReturns.append(0)
+            else:
+                # Future month
+                monthlyPnL.append(None)
+                cumulativeCapital.append(None)
+                monthlyReturns.append(None)
+        
+        conn.close()
+        
+        return jsonify({
+            'months': months,
+            'monthlyPnL': monthlyPnL,
+            'cumulativeCapital': cumulativeCapital,
+            'monthlyReturns': monthlyReturns
         })
         
     except Exception as e:

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ST0CK - APEX Trading Performance</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -13,7 +14,7 @@
             background-color: #f5f5f5;
         }
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
         }
         .header {
@@ -22,9 +23,6 @@
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         h1 {
             margin: 0 0 10px 0;
@@ -34,17 +32,6 @@
             color: #666;
             font-size: 18px;
         }
-        .nav-link {
-            background: #3b82f6;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .nav-link:hover {
-            background: #2563eb;
-        }
         .chart-container {
             background: white;
             padding: 30px;
@@ -52,7 +39,7 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 30px;
             position: relative;
-            height: 600px;
+            height: 500px;
         }
         .stats-grid {
             display: grid;
@@ -82,7 +69,7 @@
         .negative {
             color: #ef4444;
         }
-        .year-summary {
+        .forecast-section {
             background: white;
             padding: 30px;
             border-radius: 10px;
@@ -102,14 +89,27 @@
             background-color: #f9fafb;
             font-weight: 600;
         }
-        .month-cell {
-            font-weight: 500;
-        }
         .last-updated {
             text-align: right;
             color: #666;
             font-size: 14px;
             margin-top: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-link {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            background: #2563eb;
         }
     </style>
 </head>
@@ -118,9 +118,9 @@
         <div class="header">
             <div>
                 <h1>APEX Trading Strategy</h1>
-                <p class="subtitle">Yearly Performance - <span id="currentYear"></span></p>
+                <p class="subtitle">Monthly Performance - <span id="currentMonth"></span></p>
             </div>
-            <a href="/st0ckg" class="nav-link">View Current Month</a>
+            <a href="/" class="nav-link">View Yearly Summary</a>
         </div>
 
         <div class="stats-grid">
@@ -129,38 +129,53 @@
                 <div class="stat-value" id="currentCapital">$5,000</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">YTD Return</div>
-                <div class="stat-value" id="yearlyReturn">0.0%</div>
+                <div class="stat-label">Monthly Return</div>
+                <div class="stat-value" id="monthlyReturn">0.0%</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Total P&L</div>
                 <div class="stat-value" id="totalPnL">$0</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Best Month</div>
-                <div class="stat-value" id="bestMonth">-</div>
+                <div class="stat-label">Win Rate</div>
+                <div class="stat-value" id="winRate">0.0%</div>
             </div>
         </div>
 
         <div class="chart-container">
-            <canvas id="yearlyChart"></canvas>
+            <canvas id="performanceChart"></canvas>
         </div>
 
-        <div class="year-summary">
-            <h2>Monthly Performance Summary</h2>
-            <table id="monthlyTable">
+        <div class="forecast-section">
+            <h2>Monthly Forecast vs Actuals</h2>
+            <table>
                 <thead>
                     <tr>
-                        <th>Month</th>
-                        <th>Starting Capital</th>
-                        <th>Ending Capital</th>
-                        <th>P&L</th>
-                        <th>Return %</th>
+                        <th>Scenario</th>
+                        <th>Monthly Target</th>
+                        <th>Current Progress</th>
                         <th>Status</th>
                     </tr>
                 </thead>
-                <tbody id="monthlyTableBody">
-                    <!-- Will be populated by JavaScript -->
+                <tbody>
+                    <tr>
+                        <td>Conservative (50% WR)</td>
+                        <td>+87.5% ($4,375)</td>
+                        <td id="conservativeProgress">$0</td>
+                        <td id="conservativeStatus">-</td>
+                    </tr>
+                    <tr>
+                        <td>Realistic (45% WR)</td>
+                        <td>+56% ($2,800)</td>
+                        <td id="realisticProgress">$0</td>
+                        <td id="realisticStatus">-</td>
+                    </tr>
+                    <tr>
+                        <td>Pessimistic (40% WR)</td>
+                        <td>+35% ($1,750)</td>
+                        <td id="pessimisticProgress">$0</td>
+                        <td id="pessimisticStatus">-</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -173,171 +188,112 @@
     <script>
         // Configuration
         const STARTING_CAPITAL = 5000;
-        const MONTHLY_TARGETS = {
-            conservative: 87.5,  // 87.5% per month
-            realistic: 56,       // 56% per month
-            pessimistic: 35      // 35% per month
+        const GOALS = {
+            conservative: { percent: 87.5, amount: 4375 },
+            realistic: { percent: 56, amount: 2800 },
+            pessimistic: { percent: 35, amount: 1750 }
         };
 
         // Initialize chart
-        const ctx = document.getElementById('yearlyChart').getContext('2d');
-        let yearlyChart;
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        let performanceChart;
 
-        // Get current year
-        const currentYear = new Date().getFullYear();
-        document.getElementById('currentYear').textContent = currentYear;
-
-        // Generate data for the entire year
-        function generateYearData() {
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const currentMonth = new Date().getMonth();
+        // Generate data for the entire month with actuals up to today
+        function generateMonthData() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const startOfMonth = new Date(year, month, 1);
+            const endOfMonth = new Date(year, month + 1, 0);
+            const today = now.getDate();
             
-            const monthlyPnL = [];
+            const days = [];
+            const actuals = [];
             const cumulativeCapital = [];
-            const monthlyReturns = [];
+            
             let capital = STARTING_CAPITAL;
             
-            // Generate data for each month
-            for (let i = 0; i < 12; i++) {
-                if (i <= currentMonth) {
-                    // Past or current month - generate demo data
-                    const monthlyReturn = (Math.random() * 0.8 - 0.1); // -10% to +70%
-                    const pnl = capital * monthlyReturn;
+            // Generate all trading days for the month
+            for (let day = 1; day <= endOfMonth.getDate(); day++) {
+                const date = new Date(year, month, day);
+                
+                // Skip weekends
+                if (date.getDay() === 0 || date.getDay() === 6) continue;
+                
+                days.push(date);
+                
+                // Only generate actual data up to today
+                if (day <= today) {
+                    // Simulate daily P&L (between -3% and +5%)
+                    const dailyReturn = (Math.random() * 0.08 - 0.03);
+                    const dailyPnL = capital * dailyReturn;
                     
-                    monthlyPnL.push(pnl);
-                    capital += pnl;
+                    capital += dailyPnL;
+                    actuals.push(dailyPnL);
                     cumulativeCapital.push(capital);
-                    monthlyReturns.push(monthlyReturn * 100);
                 } else {
-                    // Future months
-                    monthlyPnL.push(null);
+                    // Future days have no data yet
+                    actuals.push(null);
                     cumulativeCapital.push(null);
-                    monthlyReturns.push(null);
                 }
             }
             
-            return {
-                months: months,
-                monthlyPnL: monthlyPnL,
-                cumulativeCapital: cumulativeCapital,
-                monthlyReturns: monthlyReturns
-            };
+            return { days, actuals, cumulativeCapital };
         }
 
-        // Generate goal projections
-        function generateYearlyGoals(scenario) {
-            const monthlyRate = MONTHLY_TARGETS[scenario] / 100;
-            const goals = [];
-            let capital = STARTING_CAPITAL;
+        // Generate goal line data for the entire month
+        function generateGoalData(days, scenario) {
+            const goal = GOALS[scenario];
+            const tradingDays = days.length;
+            const dailyTarget = goal.amount / tradingDays;
             
-            for (let i = 0; i < 12; i++) {
-                capital = capital * (1 + monthlyRate);
-                goals.push(capital);
-            }
-            
-            return goals;
+            return days.map((day, index) => {
+                return STARTING_CAPITAL + (dailyTarget * (index + 1));
+            });
         }
 
         // Update statistics
         function updateStats(data) {
-            // Find the last non-null capital value
+            // Find the last non-null capital value (current actual capital)
             let currentCapital = STARTING_CAPITAL;
-            let monthsCompleted = 0;
-            
+            let actualDaysCount = 0;
             for (let i = data.cumulativeCapital.length - 1; i >= 0; i--) {
                 if (data.cumulativeCapital[i] !== null) {
                     currentCapital = data.cumulativeCapital[i];
-                    monthsCompleted = i + 1;
+                    actualDaysCount = i + 1;
                     break;
                 }
             }
             
             const totalPnL = currentCapital - STARTING_CAPITAL;
-            const yearlyReturn = ((currentCapital - STARTING_CAPITAL) / STARTING_CAPITAL) * 100;
+            const monthlyReturn = ((currentCapital - STARTING_CAPITAL) / STARTING_CAPITAL) * 100;
             
-            // Find best month
-            let bestMonthIndex = 0;
-            let bestReturn = -100;
-            for (let i = 0; i < data.monthlyReturns.length; i++) {
-                if (data.monthlyReturns[i] !== null && data.monthlyReturns[i] > bestReturn) {
-                    bestReturn = data.monthlyReturns[i];
-                    bestMonthIndex = i;
-                }
-            }
+            // Calculate win rate from actual trades only
+            const actualTrades = data.actuals.filter(pnl => pnl !== null);
+            const wins = actualTrades.filter(pnl => pnl > 0).length;
+            const winRate = actualTrades.length > 0 ? (wins / actualTrades.length) * 100 : 0;
             
             // Update DOM
             document.getElementById('currentCapital').textContent = `$${currentCapital.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-            document.getElementById('yearlyReturn').textContent = `${yearlyReturn.toFixed(1)}%`;
-            document.getElementById('yearlyReturn').className = `stat-value ${yearlyReturn >= 0 ? 'positive' : 'negative'}`;
+            document.getElementById('monthlyReturn').textContent = `${monthlyReturn.toFixed(1)}%`;
+            document.getElementById('monthlyReturn').className = `stat-value ${monthlyReturn >= 0 ? 'positive' : 'negative'}`;
             document.getElementById('totalPnL').textContent = `$${totalPnL.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
             document.getElementById('totalPnL').className = `stat-value ${totalPnL >= 0 ? 'positive' : 'negative'}`;
-            document.getElementById('bestMonth').textContent = `${data.months[bestMonthIndex]} (${bestReturn.toFixed(1)}%)`;
+            document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
             
-            // Update monthly table
-            updateMonthlyTable(data);
+            // Update forecast table
+            const scenarios = ['conservative', 'realistic', 'pessimistic'];
+            scenarios.forEach(scenario => {
+                const progress = totalPnL;
+                const target = GOALS[scenario].amount;
+                const progressPercent = (progress / target) * 100;
+                
+                document.getElementById(`${scenario}Progress`).textContent = `$${progress.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                document.getElementById(`${scenario}Status`).textContent = progressPercent >= 100 ? '✅ Achieved' : `${progressPercent.toFixed(0)}%`;
+            });
             
             // Update last updated time
             document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
-        }
-
-        // Update monthly performance table
-        function updateMonthlyTable(data) {
-            const tbody = document.getElementById('monthlyTableBody');
-            tbody.innerHTML = '';
-            
-            let startingCapital = STARTING_CAPITAL;
-            
-            for (let i = 0; i < 12; i++) {
-                const row = tbody.insertRow();
-                row.className = 'month-row';
-                
-                // Month
-                row.insertCell(0).textContent = data.months[i];
-                
-                // Starting Capital
-                row.insertCell(1).textContent = `$${startingCapital.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-                
-                if (data.monthlyPnL[i] !== null) {
-                    // Ending Capital
-                    const endingCapital = data.cumulativeCapital[i];
-                    row.insertCell(2).textContent = `$${endingCapital.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-                    
-                    // P&L
-                    const pnl = data.monthlyPnL[i];
-                    const pnlCell = row.insertCell(3);
-                    pnlCell.textContent = `$${pnl.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-                    pnlCell.style.color = pnl >= 0 ? '#10b981' : '#ef4444';
-                    
-                    // Return %
-                    const returnCell = row.insertCell(4);
-                    returnCell.textContent = `${data.monthlyReturns[i].toFixed(1)}%`;
-                    returnCell.style.color = data.monthlyReturns[i] >= 0 ? '#10b981' : '#ef4444';
-                    
-                    // Status
-                    const statusCell = row.insertCell(5);
-                    if (data.monthlyReturns[i] >= MONTHLY_TARGETS.conservative) {
-                        statusCell.textContent = '🎯 Exceeded';
-                        statusCell.style.color = '#10b981';
-                    } else if (data.monthlyReturns[i] >= MONTHLY_TARGETS.realistic) {
-                        statusCell.textContent = '✅ On Track';
-                        statusCell.style.color = '#3b82f6';
-                    } else if (data.monthlyReturns[i] >= MONTHLY_TARGETS.pessimistic) {
-                        statusCell.textContent = '⚠️ Below Target';
-                        statusCell.style.color = '#f59e0b';
-                    } else {
-                        statusCell.textContent = '❌ Missed';
-                        statusCell.style.color = '#ef4444';
-                    }
-                    
-                    startingCapital = endingCapital;
-                } else {
-                    // Future month
-                    row.insertCell(2).textContent = '-';
-                    row.insertCell(3).textContent = '-';
-                    row.insertCell(4).textContent = '-';
-                    row.insertCell(5).textContent = 'Pending';
-                }
-            }
         }
 
         // Create or update chart
@@ -346,24 +302,24 @@
             let data = await loadActualData();
             
             // Fall back to demo data if no real data
-            if (!data || data.demo) {
-                data = generateYearData();
+            if (!data) {
+                data = generateMonthData();
             }
             
             updateStats(data);
             
             const chartData = {
-                labels: data.months,
+                labels: data.days.map(d => d.getDate()),
                 datasets: [
                     {
-                        label: 'Monthly P&L',
-                        data: data.monthlyPnL,
+                        label: 'Daily P&L',
+                        data: data.actuals,
                         type: 'bar',
-                        backgroundColor: data.monthlyPnL.map(v => {
+                        backgroundColor: data.actuals.map(v => {
                             if (v === null) return 'rgba(200, 200, 200, 0.2)';
                             return v >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)';
                         }),
-                        borderColor: data.monthlyPnL.map(v => {
+                        borderColor: data.actuals.map(v => {
                             if (v === null) return 'rgba(200, 200, 200, 0.4)';
                             return v >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
                         }),
@@ -383,7 +339,7 @@
                     },
                     {
                         label: 'Conservative Goal',
-                        data: generateYearlyGoals('conservative'),
+                        data: generateGoalData(data.days, 'conservative'),
                         type: 'line',
                         borderColor: 'rgb(16, 185, 129)',
                         borderWidth: 2,
@@ -394,7 +350,7 @@
                     },
                     {
                         label: 'Realistic Goal',
-                        data: generateYearlyGoals('realistic'),
+                        data: generateGoalData(data.days, 'realistic'),
                         type: 'line',
                         borderColor: 'rgb(251, 146, 60)',
                         borderWidth: 2,
@@ -405,7 +361,7 @@
                     },
                     {
                         label: 'Pessimistic Goal',
-                        data: generateYearlyGoals('pessimistic'),
+                        data: generateGoalData(data.days, 'pessimistic'),
                         type: 'line',
                         borderColor: 'rgb(239, 68, 68)',
                         borderWidth: 2,
@@ -429,7 +385,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: `APEX Strategy Performance - ${currentYear}`,
+                            text: `APEX Strategy Performance - ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
                             font: {
                                 size: 18
                             }
@@ -454,7 +410,7 @@
                             display: true,
                             title: {
                                 display: true,
-                                text: 'Month'
+                                text: 'Date'
                             }
                         },
                         y: {
@@ -477,7 +433,7 @@
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Monthly P&L ($)'
+                                text: 'Daily P&L ($)'
                             },
                             ticks: {
                                 callback: function(value) {
@@ -492,26 +448,42 @@
                 }
             };
 
-            if (yearlyChart) {
-                yearlyChart.destroy();
+            if (performanceChart) {
+                performanceChart.destroy();
             }
             
-            yearlyChart = new Chart(ctx, config);
+            performanceChart = new Chart(ctx, config);
         }
 
         // Load actual data from API
         async function loadActualData() {
             try {
-                const response = await fetch('/api/performance/yearly');
+                const response = await fetch('/api/performance');
                 if (response.ok) {
                     const data = await response.json();
-                    return data;
+                    
+                    // If we have real data, format it for the chart
+                    if (!data.demo && data.days && data.days.length > 0) {
+                        // Convert date strings to Date objects
+                        const days = data.days.map(d => new Date(d));
+                        
+                        return {
+                            days: days,
+                            actuals: data.actuals,
+                            cumulativeCapital: data.cumulativeCapital,
+                            winRate: data.winRate,
+                            totalTrades: data.totalTrades
+                        };
+                    }
                 }
             } catch (error) {
                 console.log('Using demo data - API not available');
             }
             return null;
         }
+
+        // Set current month
+        document.getElementById('currentMonth').textContent = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
         // Initialize
         createChart();
