@@ -63,19 +63,53 @@ def get_performance():
         cursor.execute(query, (current_month,))
         results = cursor.fetchall()
         
-        # Process results
+        # Get all trading days for the month
+        year = int(current_month.split('-')[0])
+        month = int(current_month.split('-')[1])
+        
+        # Create a dict of actual results
+        results_dict = {}
+        for row in results:
+            results_dict[row[0]] = {
+                'pnl': float(row[1]) if row[1] else 0,
+                'trades': row[2],
+                'wins': row[3]
+            }
+        
+        # Generate full month data
         days = []
         actuals = []
         cumulative_capital = []
         capital = 5000  # Starting capital
         
-        for row in results:
-            date = row[0]
-            daily_pnl = row[1] if row[1] else 0
+        # Get all days in the month
+        import calendar
+        num_days = calendar.monthrange(year, month)[1]
+        
+        for day in range(1, num_days + 1):
+            date = f"{year}-{month:02d}-{day:02d}"
+            date_obj = datetime(year, month, day)
+            
+            # Skip weekends
+            if date_obj.weekday() >= 5:  # Saturday = 5, Sunday = 6
+                continue
+                
             days.append(date)
-            actuals.append(float(daily_pnl))
-            capital += float(daily_pnl)
-            cumulative_capital.append(capital)
+            
+            # Check if we have data for this day
+            if date in results_dict:
+                daily_pnl = results_dict[date]['pnl']
+                actuals.append(daily_pnl)
+                capital += daily_pnl
+                cumulative_capital.append(capital)
+            elif date_obj.date() <= datetime.now().date():
+                # Past day with no trades
+                actuals.append(0)
+                cumulative_capital.append(capital)
+            else:
+                # Future day
+                actuals.append(None)
+                cumulative_capital.append(None)
         
         # Calculate statistics
         total_trades = sum(r[2] for r in results) if results else 0
