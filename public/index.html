@@ -144,6 +144,11 @@
 
         <div class="chart-container">
             <canvas id="yearlyChart"></canvas>
+            <div id="noDataMessage" style="display: none; text-align: center; padding: 100px 20px;">
+                <h3 style="color: #666;">No Trading Data Yet</h3>
+                <p style="color: #999;">Data collection will begin when the market opens.<br>
+                ST0CKG Trading hours: 9:30 AM - 11:00 AM ET</p>
+            </div>
         </div>
 
         <div class="year-summary">
@@ -187,33 +192,19 @@
         const currentYear = new Date().getFullYear();
         document.getElementById('currentYear').textContent = currentYear;
 
-        // Generate data for the entire year
-        function generateYearData() {
+        // Generate empty data structure for the year
+        function generateEmptyYearData() {
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const currentMonth = new Date().getMonth();
             
             const monthlyPnL = [];
             const cumulativeCapital = [];
             const monthlyReturns = [];
-            let capital = STARTING_CAPITAL;
             
-            // Generate data for each month
+            // All months start with no data
             for (let i = 0; i < 12; i++) {
-                if (i <= currentMonth) {
-                    // Past or current month - generate demo data
-                    const monthlyReturn = (Math.random() * 0.8 - 0.1); // -10% to +70%
-                    const pnl = capital * monthlyReturn;
-                    
-                    monthlyPnL.push(pnl);
-                    capital += pnl;
-                    cumulativeCapital.push(capital);
-                    monthlyReturns.push(monthlyReturn * 100);
-                } else {
-                    // Future months
-                    monthlyPnL.push(null);
-                    cumulativeCapital.push(null);
-                    monthlyReturns.push(null);
-                }
+                monthlyPnL.push(0);
+                cumulativeCapital.push(STARTING_CAPITAL);
+                monthlyReturns.push(0);
             }
             
             return {
@@ -271,7 +262,7 @@
             document.getElementById('yearlyReturn').className = `stat-value ${yearlyReturn >= 0 ? 'positive' : 'negative'}`;
             document.getElementById('totalPnL').textContent = `$${totalPnL.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
             document.getElementById('totalPnL').className = `stat-value ${totalPnL >= 0 ? 'positive' : 'negative'}`;
-            document.getElementById('bestMonth').textContent = `${data.months[bestMonthIndex]} (${bestReturn.toFixed(1)}%)`;
+            document.getElementById('bestMonth').textContent = bestReturn > -100 ? `${data.months[bestMonthIndex]} (${bestReturn.toFixed(1)}%)` : '-';
             
             // Update monthly table
             updateMonthlyTable(data);
@@ -345,9 +336,18 @@
             // Try to load real data first
             let data = await loadActualData();
             
-            // Fall back to demo data if no real data
-            if (!data || data.demo) {
-                data = generateYearData();
+            // Check if we have any real data
+            const hasData = data && data.monthlyPnL && data.monthlyPnL.some(val => val !== null && val !== 0);
+            
+            if (!hasData) {
+                // Show no data message
+                document.getElementById('yearlyChart').style.display = 'none';
+                document.getElementById('noDataMessage').style.display = 'block';
+                data = generateEmptyYearData();
+            } else {
+                // Show chart
+                document.getElementById('yearlyChart').style.display = 'block';
+                document.getElementById('noDataMessage').style.display = 'none';
             }
             
             updateStats(data);

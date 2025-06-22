@@ -132,11 +132,15 @@ def get_performance():
         })
         
     except Exception as e:
-        # Return demo data if database not available
+        # Return empty data if database not available
         app.logger.error(f"Database error: {e}")
         return jsonify({
-            'demo': True,
-            'message': 'Using demo data'
+            'days': [],
+            'actuals': [],
+            'cumulativeCapital': [],
+            'winRate': 0,
+            'totalTrades': 0,
+            'message': 'No trading data yet'
         })
 
 @app.route('/api/performance/yearly')
@@ -215,11 +219,15 @@ def get_yearly_performance():
         })
         
     except Exception as e:
-        # Return demo data if database not available
+        # Return empty data if database not available
         app.logger.error(f"Database error: {e}")
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         return jsonify({
-            'demo': True,
-            'message': 'Using demo data'
+            'months': months,
+            'monthlyPnL': [0] * 12,
+            'cumulativeCapital': [5000] * 12,
+            'monthlyReturns': [0] * 12,
+            'message': 'No trading data yet'
         })
 
 @app.route('/api/trades')

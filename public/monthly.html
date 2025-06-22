@@ -144,6 +144,11 @@
 
         <div class="chart-container">
             <canvas id="performanceChart"></canvas>
+            <div id="noDataMessage" style="display: none; text-align: center; padding: 100px 20px;">
+                <h3 style="color: #666;">No Trading Data Yet</h3>
+                <p style="color: #999;">Data collection will begin when the market opens.<br>
+                Trading hours: 9:30 AM - 11:00 AM ET</p>
+            </div>
         </div>
 
         <div class="forecast-section">
@@ -198,20 +203,17 @@
         const ctx = document.getElementById('performanceChart').getContext('2d');
         let performanceChart;
 
-        // Generate data for the entire month with actuals up to today
-        function generateMonthData() {
+        // Generate empty data structure for the month
+        function generateEmptyMonthData() {
             const now = new Date();
             const year = now.getFullYear();
             const month = now.getMonth();
             const startOfMonth = new Date(year, month, 1);
             const endOfMonth = new Date(year, month + 1, 0);
-            const today = now.getDate();
             
             const days = [];
             const actuals = [];
             const cumulativeCapital = [];
-            
-            let capital = STARTING_CAPITAL;
             
             // Generate all trading days for the month
             for (let day = 1; day <= endOfMonth.getDate(); day++) {
@@ -222,20 +224,9 @@
                 
                 days.push(date);
                 
-                // Only generate actual data up to today
-                if (day <= today) {
-                    // Simulate daily P&L (between -3% and +5%)
-                    const dailyReturn = (Math.random() * 0.08 - 0.03);
-                    const dailyPnL = capital * dailyReturn;
-                    
-                    capital += dailyPnL;
-                    actuals.push(dailyPnL);
-                    cumulativeCapital.push(capital);
-                } else {
-                    // Future days have no data yet
-                    actuals.push(null);
-                    cumulativeCapital.push(null);
-                }
+                // All days start with no data
+                actuals.push(null);
+                cumulativeCapital.push(null);
             }
             
             return { days, actuals, cumulativeCapital };
@@ -301,9 +292,18 @@
             // Try to load real data first
             let data = await loadActualData();
             
-            // Fall back to demo data if no real data
-            if (!data) {
-                data = generateMonthData();
+            // Check if we have any real data
+            const hasData = data && data.actuals && data.actuals.some(val => val !== null && val !== 0);
+            
+            if (!hasData) {
+                // Show no data message
+                document.getElementById('performanceChart').style.display = 'none';
+                document.getElementById('noDataMessage').style.display = 'block';
+                data = generateEmptyMonthData();
+            } else {
+                // Show chart
+                document.getElementById('performanceChart').style.display = 'block';
+                document.getElementById('noDataMessage').style.display = 'none';
             }
             
             updateStats(data);
