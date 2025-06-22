@@ -20,18 +20,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.alpaca_broker import AlpacaBroker
 from src.multi_bot_database import MultiBotDatabaseManager
 from src.unified_market_data import UnifiedMarketData
+from src.performance_config import configure_logging
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - [%(name)s] - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(f'logs/multi_bot_{datetime.now().strftime("%Y%m%d")}.log')
-    ]
-)
+# Apply performance optimizations
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +47,9 @@ class BotLauncher:
             self.config = getattr(config_module, config_name)
             
             # Replace API keys with environment variables
-            # Using the actual saved key format: STOCKG_KEY, ST0CKG_SECRET
-            if self.bot_id == 'st0ckg':
+            if self.bot_id == 'apex':
                 api_key_env = 'STOCKG_KEY'
                 secret_key_env = 'ST0CKG_SECRET'
-            elif self.bot_id == 'st0cka':
-                api_key_env = 'STOCKA_KEY'
-                secret_key_env = 'ST0CKA_SECRET'
             else:
                 api_key_env = f'{self.bot_id.upper()}_KEY'
                 secret_key_env = f'{self.bot_id.upper()}_SECRET'
@@ -119,11 +109,10 @@ class BotLauncher:
     def create_engine(self):
         """Create trading engine for this bot"""
         try:
-            # For now, use the fast engine implementation for st0ckg
-            if self.bot_id == 'st0ckg':
-                from src.st0ckg_engine import St0ckgTradingEngine
+            if self.bot_id == 'apex':
+                from src.apex_simplified_engine import APEXSimplifiedEngine
                 
-                self.engine = St0ckgTradingEngine(
+                self.engine = APEXSimplifiedEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
@@ -190,7 +179,7 @@ class BotLauncher:
 
 def main():
     parser = argparse.ArgumentParser(description='Multi-Bot Trading System Launcher')
-    parser.add_argument('bot', choices=['st0ckg', 'st0cka', 'all'],
+    parser.add_argument('bot', choices=['apex', 'all'],
                       help='Which bot to run (or "all" for all active bots)')
     parser.add_argument('--list', action='store_true',
                       help='List all registered bots')

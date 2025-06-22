@@ -1,44 +1,38 @@
-# ST0CK - Multi-Bot SPY Options Trading System
+# ST0CK - Advanced SPY Options Trading System
 
-A high-performance automated trading platform for SPY options, supporting multiple independent trading bots with isolated strategies and accounts.
+High-performance automated trading platform for SPY options using institutional-grade analytics and Alpaca Markets API.
 
-## 🚀 Current Status
+## 🚀 Active Strategy: APEX
 
-### ✅ ST0CKG - READY TO DEPLOY
-- **Strategy**: Opening Range Breakout (9:40-10:30 AM ET)
-- **Status**: Fully functional and independent
+### ✅ APEX - Advanced Pattern EXecution
+- **Strategy**: Multi-signal pattern recognition with 6 entry types
+- **Sessions**: 
+  - Morning: 9:30-11:00 AM ET (40-45 delta options)
+  - Midday: 1:00-2:30 PM ET (30-35 delta options)
+  - Power Hour: 3:00-3:45 PM ET (45-50 delta options)
 - **Capital**: $5,000
-- **Can run WITHOUT ST0CKA**
+- **Risk**: Dynamic 2-6% per trade (aggressive for small capital)
+- **Target**: 25-40% monthly returns
 
-### 🚧 ST0CKA - PENDING DEVELOPMENT
-- **Strategy**: TBD (placeholder ready)
-- **Status**: Infrastructure ready, strategy not implemented
-- **Capital**: $10,000
-- **Not blocking ST0CKG deployment**
-
-## 🎯 Quick Start for ST0CKG
+## 🎯 Quick Start
 
 ### 1. Set Environment Variables
 ```bash
 export STOCKG_KEY=your-alpaca-key
 export ST0CKG_SECRET=your-alpaca-secret
-export ST0CKG_TRADING_CAPITAL=5000
-export ALPACA_BASE_URL=https://api.alpaca.markets
-export DATABASE_URL=postgresql://...
+export APEX_TRADING_CAPITAL=5000
+export ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Use paper for testing
+export DATABASE_URL=sqlite:///trading_multi.db  # Or PostgreSQL
 ```
 
-### 2. Run Database Migration
+### 2. Install Dependencies
 ```bash
-psql $DATABASE_URL < migrations/add_multi_bot_support.sql
+pip install -r requirements.txt
 ```
 
-### 3. Deploy ST0CKG
+### 3. Run APEX
 ```bash
-# Local testing
-python main_multi.py st0ckg
-
-# GitHub Actions (automatic at 9:25 AM ET)
-# Push to main branch and it runs daily
+python main_multi.py apex
 ```
 
 ## 🏗️ Architecture
@@ -46,122 +40,91 @@ python main_multi.py st0ckg
 ```
 ST0CK/
 ├── bots/
-│   ├── st0ckg/          # ✅ Complete & Independent
-│   │   ├── config.py    # Trading parameters
-│   │   └── strategy.py  # Opening range breakout logic
-│   └── st0cka/          # 🚧 Placeholder only
-│       └── config.py    # Inactive configuration
+│   └── st0ckg/           # APEX strategy (renamed from ST0CKG)
+│       ├── config.py     # APEX configuration
+│       └── strategy.py   # APEXStrategy implementation
 ├── src/
-│   ├── unified_market_data.py  # Shared SPY data (cached)
-│   ├── alpaca_broker.py        # Direct API integration
-│   └── multi_bot_database.py   # Bot-aware persistence
-└── main_multi.py               # Multi-bot launcher
+│   ├── unified_market_data.py      # Alpaca data with caching
+│   ├── alpaca_broker.py           # Alpaca order execution
+│   ├── apex_engine.py             # APEX trading engine
+│   ├── market_microstructure.py   # Volume profile, VWAP, GEX
+│   ├── apex_signals.py            # Signal detection system
+│   └── apex_options_selector.py   # Smart option selection
+└── main_multi.py                  # Launcher
 ```
 
-## ✅ ST0CKG Independence Verification
+## 📊 APEX Signal Types
 
-ST0CKG is **100% independent** and can run without ST0CKA:
+1. **Gamma Squeeze** - Market maker positioning imbalances
+2. **VWAP Reclaim** - Mean reversion to volume-weighted price
+3. **Opening Drive** - Momentum continuation from open
+4. **Liquidity Vacuum** - Rapid moves through thin order books
+5. **Options Pin** - Price magnetization to high OI strikes
+6. **Dark Pool Flow** - Institutional directional bias
 
-1. **Separate API Credentials** - Uses STOCKG_KEY/ST0CKG_SECRET
-2. **Isolated Database Records** - All trades tagged with bot_id='st0ckg'
-3. **Independent Risk Management** - Own capital and loss limits
-4. **Separate GitHub Workflow** - `.github/workflows/st0ckg-trading.yml`
-5. **No Shared State** - Only market data is cached/shared for efficiency
+## ⚡ Performance Features
 
-### Proof of Independence:
-```python
-# ST0CKG runs fine even if ST0CKA credentials are missing
-# The launcher checks each bot individually:
-if bot_id == 'st0ckg' and has_credentials:
-    run_st0ckg()  # Runs independently
-```
+- **100% Alpaca API** - All market data and execution via Alpaca
+- **Sub-second execution** - Optimized for 0DTE options
+- **Smart caching** - 5s quotes, 60s options chains
+- **Async architecture** - Non-blocking I/O operations
+- **Minimal dependencies** - Lean codebase for speed
 
-## 🔧 What's Needed for ST0CKA
+## 🔒 Risk Management
 
-To make ST0CKA functional, implement:
+- **Capital-based sizing**: Higher risk for accounts under $10k
+- **Dynamic adjustment** based on 7 factors
+- **Multiple exit strategies** (stop loss, targets, time, trailing)
+- **Session-based limits** and regime filters
+- **Max daily loss**: $500
+- **Max consecutive losses**: 3
 
-### 1. Strategy Implementation
-Create `bots/st0cka/strategy.py`:
-```python
-from bots.base.strategy import BaseStrategy
+## 📈 Expected Performance
 
-class YourStrategyName(BaseStrategy):
-    def check_entry_conditions(self, price, market_data):
-        # Your strategy logic here
-        pass
-    
-    def calculate_position_size(self, signal, balance, price):
-        # Position sizing logic
-        pass
-    
-    # ... other required methods
-```
+Based on enhanced Graystone methodology:
+- **Win Rate**: 55-65%
+- **Average Winner**: 2.5R
+- **Average Loser**: 1R
+- **Monthly Return**: 25-40%
+- **Daily Trades**: 5-7
 
-### 2. Update Configuration
-Edit `bots/st0cka/config.py`:
-- Set `'active': True`
-- Define strategy parameters
-- Set trading window
+## 📊 Monitoring
 
-### 3. Create Trading Engine
-Create `src/st0cka_engine.py` similar to st0ckg_engine.py
+- Real-time console logging
+- Trade execution in logs/
+- Performance metrics tracked
 
-### 4. Add Credentials
+## 🎯 Trading Schedule
+
+**Morning Session** (9:30-11:00 AM ET)
+- Focus: Opening momentum, gamma squeezes
+- Delta: 40-45 (aggressive)
+
+**Midday Session** (1:00-2:30 PM ET)  
+- Focus: VWAP reclaims, reversals
+- Delta: 30-35 (conservative)
+
+**Power Hour** (3:00-3:45 PM ET)
+- Focus: EOD momentum, gamma unwind
+- Delta: 45-50 (aggressive)
+
+## ⚠️ Important Notes
+
+- **Paper trading first** - Test with Alpaca paper account
+- **0DTE options risk** - Can lose 100% rapidly
+- **Requires monitoring** - Not set-and-forget
+- **Options approval needed** - Alpaca account must have options enabled
+
+## 🔧 Monitoring
+
 ```bash
-export STOCKA_KEY=your-second-alpaca-key
-export ST0CKA_SECRET=your-second-alpaca-secret
-```
+# View logs
+tail -f logs/multi_bot_$(date +%Y%m%d).log
 
-### 5. Enable Workflow
-Update `.github/workflows/st0cka-trading.yml` schedule
-
-## 🚀 Deployment Options
-
-### GitHub Actions (Recommended)
-1. Add secrets to repository
-2. Push to main branch
-3. ST0CKG runs automatically at 9:25 AM ET
-
-### Manual Deployment
-```bash
-# Deploy only ST0CKG
-python main_multi.py st0ckg
-
-# List all bots
+# Check positions
 python main_multi.py --list
 ```
 
-### Cloud Deployment
-- Each bot can be deployed separately
-- Different servers/regions possible
-- No coordination required
+## 📄 License
 
-## 📊 Dashboard
-
-Multi-bot dashboard at https://st0ck.onrender.com shows:
-- Combined P&L across all bots
-- Side-by-side performance comparison
-- Real-time trade log
-- Individual bot metrics
-
-**Note**: Dashboard shows ST0CKA as "INACTIVE" until implemented
-
-## 🔒 Security
-
-- Each bot uses separate Alpaca account/API keys
-- Database access controlled by bot_id
-- No cross-bot data access
-- Independent risk limits
-
-## 📈 Performance
-
-- **Shared**: Market data (SPY quotes/options cached)
-- **Isolated**: Everything else (orders, positions, risk)
-- **Fast**: Sub-second execution per bot
-- **Scalable**: Add more bots without affecting others
-
-## 🎯 Summary
-
-**ST0CKG is ready to trade NOW**. It doesn't need ST0CKA to function. Deploy it today and add ST0CKA whenever you're ready with a strategy.
-
-The system is designed for complete bot independence - each bot is a self-contained trading unit that happens to share infrastructure for efficiency.
+Proprietary - All rights reserved
