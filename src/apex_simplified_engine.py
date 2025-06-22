@@ -17,8 +17,8 @@ class APEXSimplifiedEngine(FastTradingEngine):
     """Simplified APEX engine - just the essentials"""
     
     def __init__(self, config: dict, capital: float, db_connection_string: str):
-        # Initialize with bot_id
-        self.bot_id = 'apex'
+        # Initialize with bot_id from config
+        self.bot_id = config.get('bot_id', 'st0ckg')
         
         # Create multi-bot aware database
         self.multi_db = MultiBotDatabaseManager(

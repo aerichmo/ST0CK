@@ -47,9 +47,12 @@ class BotLauncher:
             self.config = getattr(config_module, config_name)
             
             # Replace API keys with environment variables
-            if self.bot_id == 'apex':
+            if self.bot_id == 'st0ckg':
                 api_key_env = 'STOCKG_KEY'
                 secret_key_env = 'ST0CKG_SECRET'
+            elif self.bot_id == 'st0cka':
+                api_key_env = 'STOCKA_KEY'
+                secret_key_env = 'ST0CKA_SECRET'
             else:
                 api_key_env = f'{self.bot_id.upper()}_KEY'
                 secret_key_env = f'{self.bot_id.upper()}_SECRET'
@@ -109,10 +112,19 @@ class BotLauncher:
     def create_engine(self):
         """Create trading engine for this bot"""
         try:
-            if self.bot_id == 'apex':
+            if self.bot_id == 'st0ckg':
                 from src.apex_simplified_engine import APEXSimplifiedEngine
                 
                 self.engine = APEXSimplifiedEngine(
+                    config=self.config,
+                    capital=self.config['capital'],
+                    db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
+                )
+            elif self.bot_id == 'st0cka':
+                # ST0CKA uses base engine for now
+                from src.base_fast_engine import FastTradingEngine
+                
+                self.engine = FastTradingEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
@@ -179,7 +191,7 @@ class BotLauncher:
 
 def main():
     parser = argparse.ArgumentParser(description='Multi-Bot Trading System Launcher')
-    parser.add_argument('bot', choices=['apex', 'all'],
+    parser.add_argument('bot', choices=['st0ckg', 'st0cka', 'all'],
                       help='Which bot to run (or "all" for all active bots)')
     parser.add_argument('--list', action='store_true',
                       help='List all registered bots')

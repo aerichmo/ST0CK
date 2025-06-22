@@ -4,9 +4,9 @@ Lean, efficient, focused on execution
 """
 from datetime import time
 
-APEX_CONFIG = {
-    'bot_id': 'apex',
-    'strategy_name': 'APEX Simplified',
+ST0CKG_CONFIG = {
+    'bot_id': 'st0ckg',
+    'strategy_name': 'ST0CKG - APEX Strategy',
     
     # Single morning session only
     'trading_window': {

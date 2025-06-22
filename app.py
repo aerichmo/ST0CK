@@ -44,7 +44,7 @@ def health():
 
 @app.route('/api/performance')
 def get_performance():
-    """Get APEX performance data"""
+    """Get ST0CKG performance data"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -58,7 +58,7 @@ def get_performance():
                 COUNT(*) as trade_count,
                 SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins
             FROM trades
-            WHERE bot_id = 'apex'
+            WHERE bot_id = 'st0ckg'
             AND strftime('%Y-%m', entry_time) = ?
             AND status = 'CLOSED'
             GROUP BY DATE(entry_time)
@@ -141,7 +141,7 @@ def get_performance():
 
 @app.route('/api/performance/yearly')
 def get_yearly_performance():
-    """Get APEX yearly performance data"""
+    """Get ST0CKG yearly performance data"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -155,7 +155,7 @@ def get_yearly_performance():
                 COUNT(*) as trade_count,
                 SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins
             FROM trades
-            WHERE bot_id = 'apex'
+            WHERE bot_id = 'st0ckg'
             AND strftime('%Y', entry_time) = ?
             AND status = 'CLOSED'
             GROUP BY strftime('%m', entry_time)
@@ -224,7 +224,7 @@ def get_yearly_performance():
 
 @app.route('/api/trades')
 def get_trades():
-    """Get recent APEX trades"""
+    """Get recent ST0CKG trades"""
     limit = request.args.get('limit', 20, type=int)
     
     try:
@@ -237,7 +237,7 @@ def get_trades():
                    contracts, exit_time, exit_price, exit_reason,
                    realized_pnl, status
             FROM trades
-            WHERE bot_id = 'apex'
+            WHERE bot_id = 'st0ckg'
             ORDER BY entry_time DESC
             LIMIT ?
         """
