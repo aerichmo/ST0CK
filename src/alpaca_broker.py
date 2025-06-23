@@ -376,3 +376,114 @@ class AlpacaBroker(BrokerInterface):
         except Exception as e:
             logger.error(f"Failed to get orders: {e}")
             return []
+    
+    def place_stock_order(self, symbol: str, quantity: int, side: str,
+                         order_type: str = 'MARKET', limit_price: Optional[float] = None,
+                         time_in_force: str = 'DAY') -> Optional[str]:
+        """Place a stock order"""
+        if not self.connected:
+            return None
+            
+        try:
+            # Convert side string to OrderSide enum
+            order_side = OrderSide.BUY if side.upper() == 'BUY' else OrderSide.SELL
+            
+            # Convert time_in_force string to TimeInForce enum
+            tif_map = {
+                'DAY': TimeInForce.DAY,
+                'GTC': TimeInForce.GTC,
+                'IOC': TimeInForce.IOC,
+                'FOK': TimeInForce.FOK
+            }
+            tif = tif_map.get(time_in_force.upper(), TimeInForce.DAY)
+            
+            # Create order request based on type
+            if order_type.upper() == 'MARKET':
+                order_data = MarketOrderRequest(
+                    symbol=symbol,
+                    qty=quantity,
+                    side=order_side,
+                    time_in_force=tif
+                )
+            elif order_type.upper() == 'LIMIT':
+                if limit_price is None:
+                    logger.error("Limit price required for limit orders")
+                    return None
+                order_data = LimitOrderRequest(
+                    symbol=symbol,
+                    qty=quantity,
+                    side=order_side,
+                    time_in_force=tif,
+                    limit_price=limit_price
+                )
+            else:
+                logger.error(f"Unsupported order type: {order_type}")
+                return None
+            
+            # Submit order
+            order = self.trading_client.submit_order(order_data)
+            logger.info(f"Stock order placed: {symbol} {side} {quantity} shares, ID: {order.id}")
+            return order.id
+            
+        except Exception as e:
+            logger.error(f"Failed to place stock order: {e}")
+            return None
+    
+    def close_position(self, symbol: str, quantity: Optional[int] = None) -> Optional[str]:
+        """Close a position"""
+        if not self.connected:
+            return None
+            
+        try:
+            # Get current position
+            positions = self.get_positions()
+            position = next((p for p in positions if p['symbol'] == symbol), None)
+            
+            if not position:
+                logger.warning(f"No position found for {symbol}")
+                return None
+            
+            # Determine quantity to close
+            close_qty = quantity if quantity else abs(position['quantity'])
+            
+            # Determine side (opposite of position)
+            side = 'SELL' if position['quantity'] > 0 else 'BUY'
+            
+            # Place market order to close
+            return self.place_stock_order(
+                symbol=symbol,
+                quantity=close_qty,
+                side=side,
+                order_type='MARKET'
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to close position: {e}")
+            return None
+    
+    def get_open_orders(self) -> List[Dict]:
+        """Get all open orders"""
+        return self.get_orders(status='open')
+    
+    def get_option_chain(self, underlying: str, expiration: Optional[str] = None) -> Optional[Dict]:
+        """Get option chain for underlying - not implemented for Alpaca"""
+        logger.warning("Option chain not implemented for Alpaca broker")
+        return None
+    
+    def get_option_quotes(self, contracts: List[str]) -> Optional[Dict]:
+        """Get quotes for multiple option contracts"""
+        if not self.connected:
+            return None
+            
+        quotes = {}
+        for contract in contracts:
+            quote = self.get_option_quote(contract)
+            if quote:
+                quotes[contract] = quote
+                
+        return quotes if quotes else None
+    
+    @property
+    def is_connected(self) -> bool:
+        """Check if broker is connected"""
+        return self.connected
