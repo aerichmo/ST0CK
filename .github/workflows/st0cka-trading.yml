@@ -1,4 +1,4 @@
-name: APEX Trading Bot
+name: st0cka
 
 on:
   schedule:
@@ -23,12 +23,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Run APEX Trading Bot
+    - name: Run ST0CKA Trading Bot
       env:
         STOCKG_KEY: ${{ secrets.STOCKG_KEY }}
         ST0CKG_SECRET: ${{ secrets.ST0CKG_SECRET }}
         ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        APEX_TRADING_CAPITAL: ${{ secrets.APEX_TRADING_CAPITAL }}
+        ST0CKA_TRADING_CAPITAL: ${{ secrets.ST0CKA_TRADING_CAPITAL }}
       run: |
-        python main_multi.py apex
+        python main_multi.py st0cka
