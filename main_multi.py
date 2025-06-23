@@ -60,9 +60,15 @@ class BotLauncher:
             
             # Get capital from environment or use config default
             capital_env = f'{self.bot_id.upper()}_TRADING_CAPITAL'
-            self.config['capital'] = float(os.getenv(capital_env, self.config.get('capital', 5000)))
+            capital_value = os.getenv(capital_env)
+            if capital_value and capital_value.strip():
+                self.config['capital'] = float(capital_value)
+            else:
+                # Use default from config or fallback to 5000
+                self.config['capital'] = self.config.get('capital', 5000)
             
             logger.info(f"Loaded configuration for {self.bot_id}")
+            logger.info(f"Trading capital: ${self.config['capital']:,.2f}")
             return self.config
             
         except Exception as e:
