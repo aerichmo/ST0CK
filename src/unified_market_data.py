@@ -14,7 +14,6 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import (
     OptionSnapshotRequest, 
     OptionLatestQuoteRequest,
-    OptionContractsRequest,
     StockQuotesRequest,
     StockBarsRequest
 )
