@@ -2,13 +2,17 @@ name: ST0CKA
 
 on:
   schedule:
-    # Run at 9:25 AM ET Monday-Friday (2:25 PM UTC)
-    - cron: '25 14 * * 1-5'
+    # Run at 9:25 AM ET Monday-Friday
+    # 2:25 PM UTC during EST (winter)
+    # 1:25 PM UTC during EDT (summer)
+    - cron: '25 13 * * 1-5'  # EDT (UTC-4)
+    - cron: '25 14 * * 1-5'  # EST (UTC-5)
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
   trade:
     runs-on: ubuntu-latest
+    timeout-minutes: 480  # 8 hour timeout
     
     steps:
     - uses: actions/checkout@v3

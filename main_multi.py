@@ -169,6 +169,22 @@ class BotLauncher:
             logger.info(f"Starting {self.bot_id} with ${self.config['capital']:,.2f} capital")
             self.is_running = True
             
+            # Log initial status and check if we should wait
+            now = datetime.now()
+            if now.weekday() >= 5:
+                logger.info("Today is weekend - market is closed. Exiting.")
+                return
+            elif now.hour < 8:  # Before 8 AM ET
+                logger.info(f"Too early to start (current time: {now.strftime('%I:%M %p')}). Bot should be scheduled closer to market open.")
+                return
+            elif now.hour >= 17:  # After 5 PM ET
+                logger.info(f"Market has closed for the day (current time: {now.strftime('%I:%M %p')}). Exiting.")
+                return
+            elif now.hour < 9 or now.hour >= 16:
+                logger.info(f"Outside market hours (current time: {now.strftime('%I:%M %p')}). Waiting for market open at 9:30 AM ET...")
+            
+            last_status_log = datetime.now()
+            
             # Main trading loop
             while self.is_running:
                 try:
@@ -176,6 +192,14 @@ class BotLauncher:
                     now = datetime.now()
                     if now.weekday() < 5 and 9 <= now.hour < 16:
                         self.engine.run_trading_cycle()
+                    else:
+                        # Log status every 5 minutes
+                        if (now - last_status_log).total_seconds() > 300:
+                            if now.weekday() >= 5:
+                                logger.info("Waiting... (weekend - market closed)")
+                            else:
+                                logger.info(f"Waiting for market hours... (current time: {now.strftime('%I:%M %p')})")
+                            last_status_log = now
                     
                     # Sleep interval based on trading window
                     if self.engine.is_in_active_window():
