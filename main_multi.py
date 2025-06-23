@@ -13,6 +13,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import time
 from typing import Dict, Any
+import pytz
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -170,36 +171,41 @@ class BotLauncher:
             self.is_running = True
             
             # Log initial status and check if we should wait
-            now = datetime.now()
-            if now.weekday() >= 5:
+            et_tz = pytz.timezone('America/New_York')
+            now_et = datetime.now(et_tz)
+            now_utc = datetime.now(pytz.UTC)
+            
+            logger.info(f"Current time: {now_et.strftime('%I:%M %p')} ET / {now_utc.strftime('%I:%M %p')} UTC")
+            
+            if now_et.weekday() >= 5:
                 logger.info("Today is weekend - market is closed. Exiting.")
                 return
-            elif now.hour < 8:  # Before 8 AM ET
-                logger.info(f"Too early to start (current time: {now.strftime('%I:%M %p')}). Bot should be scheduled closer to market open.")
+            elif now_et.hour < 8:  # Before 8 AM ET
+                logger.info(f"Too early to start. Bot should be scheduled closer to market open.")
                 return
-            elif now.hour >= 17:  # After 5 PM ET
-                logger.info(f"Market has closed for the day (current time: {now.strftime('%I:%M %p')}). Exiting.")
+            elif now_et.hour >= 17:  # After 5 PM ET
+                logger.info(f"Market has closed for the day. Exiting.")
                 return
-            elif now.hour < 9 or now.hour >= 16:
-                logger.info(f"Outside market hours (current time: {now.strftime('%I:%M %p')}). Waiting for market open at 9:30 AM ET...")
+            elif now_et.hour < 9 or now_et.hour >= 16:
+                logger.info(f"Outside market hours. Waiting for market open at 9:30 AM ET...")
             
             last_status_log = datetime.now()
             
             # Main trading loop
             while self.is_running:
                 try:
-                    # Only run during market hours
-                    now = datetime.now()
-                    if now.weekday() < 5 and 9 <= now.hour < 16:
+                    # Only run during market hours (Eastern Time)
+                    now_et = datetime.now(et_tz)
+                    if now_et.weekday() < 5 and 9 <= now_et.hour < 16:
                         self.engine.run_trading_cycle()
                     else:
                         # Log status every 5 minutes
-                        if (now - last_status_log).total_seconds() > 300:
-                            if now.weekday() >= 5:
+                        if (datetime.now() - last_status_log).total_seconds() > 300:
+                            if now_et.weekday() >= 5:
                                 logger.info("Waiting... (weekend - market closed)")
                             else:
-                                logger.info(f"Waiting for market hours... (current time: {now.strftime('%I:%M %p')})")
-                            last_status_log = now
+                                logger.info(f"Waiting for market hours... (current time: {now_et.strftime('%I:%M %p')} ET)")
+                            last_status_log = datetime.now()
                     
                     # Sleep interval based on trading window
                     if self.engine.is_in_active_window():
