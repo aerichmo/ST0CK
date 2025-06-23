@@ -45,17 +45,37 @@ class MultiBotDatabaseManager(BatchedDatabaseManager):
         """Set the current bot ID for operations"""
         self.bot_id = bot_id
     
+    def _serialize_config(self, config: Dict) -> Dict:
+        """Convert config to JSON-serializable format"""
+        import copy
+        from datetime import time
+        
+        def convert_value(obj):
+            if isinstance(obj, time):
+                return obj.strftime('%H:%M:%S')
+            elif isinstance(obj, dict):
+                return {k: convert_value(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_value(v) for v in obj]
+            else:
+                return obj
+        
+        return convert_value(config)
+    
     def register_bot(self, bot_id: str, bot_name: str, strategy_type: str, 
                     alpaca_account: str = None, config: Dict = None) -> bool:
         """Register a new bot in the system"""
         session = self.Session()
         try:
+            # Convert config to JSON-serializable format
+            serializable_config = self._serialize_config(config) if config else {}
+            
             bot = BotRegistry(
                 bot_id=bot_id,
                 bot_name=bot_name,
                 strategy_type=strategy_type,
                 alpaca_account=alpaca_account,
-                config=config or {},
+                config=serializable_config,
                 is_active=True
             )
             session.merge(bot)  # Use merge to update if exists

@@ -40,6 +40,15 @@ ST0CKG_CONFIG = {
         }
     },
     
+    # Options configuration (required by engine)
+    'options': {
+        'target_delta': 0.50,  # ATM options
+        'max_dte': 0,  # 0DTE only
+        'min_volume': 500,
+        'max_spread': 0.10,  # $0.10 max spread
+        'min_time_to_expiry': 180  # 3 hours minimum
+    },
+    
     # Simple option selection
     'option_selection': {
         'target_dte': 0,  # 0DTE only
