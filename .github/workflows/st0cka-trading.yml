@@ -44,7 +44,6 @@ jobs:
         APCA_API_SECRET_KEY: ${{ secrets.ST0CKASECRET }}  # For UnifiedMarketData
         ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        ST0CKA_TRADING_CAPITAL: ${{ secrets.ST0CKA_TRADING_CAPITAL }}
       run: |
         mkdir -p logs
         python main_multi.py st0cka

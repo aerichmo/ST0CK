@@ -58,17 +58,9 @@ class BotLauncher:
             self.config['alpaca']['secret_key'] = os.getenv(secret_key_env)
             self.config['alpaca']['base_url'] = os.getenv('ALPACA_BASE_URL', 'https://api.alpaca.markets')
             
-            # Get capital from environment or use config default
-            capital_env = f'{self.bot_id.upper()}_TRADING_CAPITAL'
-            capital_value = os.getenv(capital_env)
-            if capital_value and capital_value.strip():
-                self.config['capital'] = float(capital_value)
-            else:
-                # Use default from config or fallback to 5000
-                self.config['capital'] = self.config.get('capital', 5000)
-            
+            # Capital will be fetched from Alpaca account later
+            # Remove any hardcoded capital values
             logger.info(f"Loaded configuration for {self.bot_id}")
-            logger.info(f"Trading capital: ${self.config['capital']:,.2f}")
             return self.config
             
         except Exception as e:
@@ -156,7 +148,22 @@ class BotLauncher:
                 logger.error(f"API credentials not found for {self.bot_id}")
                 return
             
-            # Create engine
+            # Create broker first to get account info
+            broker = self.create_broker()
+            if broker.connect():
+                account_info = broker.get_account_info()
+                if account_info:
+                    # Use actual account capital
+                    self.config['capital'] = account_info['cash']
+                    logger.info(f"Using Alpaca account capital: ${self.config['capital']:,.2f}")
+                else:
+                    logger.error("Failed to get account info from Alpaca")
+                    return
+            else:
+                logger.error("Failed to connect to Alpaca")
+                return
+            
+            # Create engine with actual capital
             self.create_engine()
             
             logger.info(f"Starting {self.bot_id} with ${self.config['capital']:,.2f} capital")
