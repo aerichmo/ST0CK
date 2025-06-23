@@ -43,6 +43,7 @@ ST0CKG_CONFIG = {
     # Options configuration (required by engine)
     'options': {
         'target_delta': 0.50,  # ATM options
+        'delta_tolerance': 0.10,  # Accept deltas within 0.40-0.60
         'max_dte': 0,  # 0DTE only
         'min_volume': 500,
         'max_spread': 0.10,  # $0.10 max spread

@@ -34,9 +34,9 @@ class FastTradingEngine:
         
         # Initialize components
         self.broker = AlpacaBroker(
-            config["alpaca"]["api_key"],
-            config["alpaca"]["secret_key"],
-            config["alpaca"]["paper"]
+            api_key=config["alpaca"]["api_key"],
+            secret_key=config["alpaca"]["secret_key"],
+            paper=config["alpaca"]["paper"]
         )
         self.broker.connect()
         
