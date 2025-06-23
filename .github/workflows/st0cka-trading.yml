@@ -23,6 +23,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Debug - Check code version
+      run: |
+        echo "Checking unified_market_data.py imports..."
+        grep -n "OptionContractsRequest" src/unified_market_data.py || echo "OptionContractsRequest not found (good)"
+        echo "Git commit:"
+        git log --oneline -1
+    
     - name: Run ST0CKA Trading Bot
       env:
         STOCKG_KEY: ${{ secrets.STOCKG_KEY }}
