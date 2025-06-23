@@ -49,6 +49,8 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         STOCKG_KEY: ${{ secrets.STOCKG_KEY }}
         ST0CKG_SECRET: ${{ secrets.ST0CKG_SECRET }}
+        APCA_API_KEY_ID: ${{ secrets.STOCKG_KEY }}  # For UnifiedMarketData
+        APCA_API_SECRET_KEY: ${{ secrets.ST0CKG_SECRET }}  # For UnifiedMarketData
         ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         ST0CKG_TRADING_CAPITAL: ${{ secrets.ST0CKG_TRADING_CAPITAL }}
         EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
