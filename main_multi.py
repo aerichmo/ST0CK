@@ -24,9 +24,6 @@ from src.performance_config import configure_logging
 
 load_dotenv()
 
-# Apply performance optimizations
-configure_logging()
-
 logger = logging.getLogger(__name__)
 
 
@@ -200,6 +197,12 @@ def main():
     
     # Create logs directory
     os.makedirs('logs', exist_ok=True)
+    
+    # Configure logging with bot_id
+    if args.bot and args.bot != 'all':
+        configure_logging(args.bot)
+    else:
+        configure_logging('multi')
     
     if args.list:
         # List all bots

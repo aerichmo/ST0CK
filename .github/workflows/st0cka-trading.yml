@@ -38,4 +38,13 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         ST0CKA_TRADING_CAPITAL: ${{ secrets.ST0CKA_TRADING_CAPITAL }}
       run: |
+        mkdir -p logs
         python main_multi.py st0cka
+    
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: st0cka-logs-${{ github.run_id }}
+        path: logs/
+        retention-days: 30

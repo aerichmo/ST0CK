@@ -73,10 +73,14 @@ PERFORMANCE_SETTINGS = {
     'memory_warning_threshold': 500 * 1024 * 1024,  # 500MB
 }
 
-def configure_logging():
+def configure_logging(bot_id: str = 'apex'):
     """Apply optimized logging configuration"""
     import logging.config
-    logging.config.dictConfig(LOGGING_CONFIG)
+    import copy
+    # Deep copy the config to avoid modifying the original
+    config = copy.deepcopy(LOGGING_CONFIG)
+    config['handlers']['file']['filename'] = f'logs/{bot_id}_{os.getpid()}.log'
+    logging.config.dictConfig(config)
     
 def get_performance_setting(key: str, default=None):
     """Get performance setting with fallback"""
