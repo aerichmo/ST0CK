@@ -116,10 +116,10 @@ class BotLauncher:
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
                 )
             elif self.bot_id == 'st0cka':
-                # ST0CKA uses base engine for now
-                from src.base_fast_engine import FastTradingEngine
+                # ST0CKA uses simple stock engine
+                from src.simple_stock_engine import SimpleStockEngine
                 
-                self.engine = FastTradingEngine(
+                self.engine = SimpleStockEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
