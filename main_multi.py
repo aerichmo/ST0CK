@@ -215,10 +215,8 @@ def main():
         print("-" * 60)
         return
     
-    # Pre-fetch market data for all bots (shared resource)
-    logger.info("Initializing shared market data...")
-    market_data = UnifiedMarketData()
-    market_data.prefetch_session_data('SPY')
+    # Market data initialization moved to individual bots
+    # Each bot will initialize its own market data as needed
     
     if args.bot == 'all':
         # Run all active bots (would need multiprocessing for true parallel execution)

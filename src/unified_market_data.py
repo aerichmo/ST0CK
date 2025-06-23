@@ -63,14 +63,30 @@ class UnifiedMarketData:
     Optimized for SPY options trading with aggressive caching
     """
     
-    def __init__(self, api_key: str = None, api_secret: str = None):
+    def __init__(self, api_key: str = None, api_secret: str = None, skip_options: bool = False):
         # Get credentials
         self.api_key = api_key or os.environ.get('APCA_API_KEY_ID')
         self.api_secret = api_secret or os.environ.get('APCA_API_SECRET_KEY')
         
-        # Initialize clients
-        self.option_client = OptionHistoricalDataClient(self.api_key, self.api_secret)
-        self.stock_client = StockHistoricalDataClient(self.api_key, self.api_secret)
+        # Debug logging
+        logger.debug(f"API Key from env: {'Set' if self.api_key else 'Not set'}")
+        logger.debug(f"API Secret from env: {'Set' if self.api_secret else 'Not set'}")
+        
+        # Initialize clients only if credentials are available
+        self.option_client = None
+        self.stock_client = None
+        
+        if self.api_key and self.api_secret:
+            # Initialize clients
+            if not skip_options:
+                try:
+                    self.option_client = OptionHistoricalDataClient(self.api_key, self.api_secret)
+                except Exception as e:
+                    logger.warning(f"Could not initialize option client: {e}")
+            
+            self.stock_client = StockHistoricalDataClient(self.api_key, self.api_secret)
+        else:
+            logger.warning("No Alpaca API credentials found. Market data will not be available.")
         
         # Initialize caches with appropriate TTLs
         self.quote_cache = TTLCache(maxsize=1000, ttl=5)      # 5 seconds for quotes
