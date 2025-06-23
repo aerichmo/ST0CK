@@ -84,6 +84,41 @@ ST0CKG_CONFIG = {
         'vwap_enabled': True
     },
     
+    # Trend filter configuration
+    'trend_filter': {
+        'ema_fast': 9,
+        'ema_slow': 21,
+        'atr_period': 14,
+        'atr_multiplier': 1.5
+    },
+    
+    # Session configuration
+    'session': {
+        'timezone': 'America/New_York'
+    },
+    
+    # Risk management configuration
+    'risk_management': {
+        'position_risk_pct': 0.035,  # 3.5% risk per trade
+        'daily_loss_limit_pct': 0.10,  # 10% daily loss limit
+        'consecutive_loss_limit': 3,
+        'max_positions': 2,
+        'account_size_tiers': {
+            'small': {
+                'max': 10000,
+                'risk_pct': 0.035
+            },
+            'medium': {
+                'max': 25000,
+                'risk_pct': 0.03
+            },
+            'large': {
+                'max': 100000,
+                'risk_pct': 0.025
+            }
+        }
+    },
+    
     # Alpaca settings
     'alpaca': {
         'paper': True,
