@@ -114,13 +114,13 @@ class UnifiedMarketData:
                 logger.info(f"Pre-fetching options for {expiry.date()}")
                 
                 # Fetch CALL options
-                call_chain = self.get_option_chain(symbol, expiry, 'CALL')
+                call_chain = self.get_option_chain_fast(symbol, expiry, 'CALL')
                 if call_chain:
                     key = f"{symbol}_{expiry.date()}_C"
                     self.current_session_options[key] = call_chain
                 
                 # Fetch PUT options
-                put_chain = self.get_option_chain(symbol, expiry, 'PUT')
+                put_chain = self.get_option_chain_fast(symbol, expiry, 'PUT')
                 if put_chain:
                     key = f"{symbol}_{expiry.date()}_P"
                     self.current_session_options[key] = put_chain
