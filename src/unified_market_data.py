@@ -110,25 +110,20 @@ class UnifiedMarketData:
             expirations = self._get_weekly_expirations(3)
             
             for expiry in expirations:
-                # Get all contracts
-                # Skip option chain fetching for now - not available in current alpaca-py
-                # This would need to be implemented with option snapshots
-                logger.warning(f"Option chain prefetching not implemented for {expiry.date()}")
-                continue
+                # Pre-fetch option chains for both calls and puts
+                logger.info(f"Pre-fetching options for {expiry.date()}")
                 
-                # Filter and cache
-                for contract in contracts:
-                    key = f"{symbol}_{expiry.date()}_{contract.call_or_put}"
-                    if key not in self.current_session_options:
-                        self.current_session_options[key] = []
-                    
-                    contract_dict = {
-                        'contract_symbol': contract.symbol,
-                        'strike': float(contract.strike_price),
-                        'expiration': contract.expiration_date.isoformat(),
-                        'option_type': 'CALL' if contract.call_or_put == 'C' else 'PUT'
-                    }
-                    self.current_session_options[key].append(contract_dict)
+                # Fetch CALL options
+                call_chain = self.get_option_chain(symbol, expiry, 'CALL')
+                if call_chain:
+                    key = f"{symbol}_{expiry.date()}_C"
+                    self.current_session_options[key] = call_chain
+                
+                # Fetch PUT options
+                put_chain = self.get_option_chain(symbol, expiry, 'PUT')
+                if put_chain:
+                    key = f"{symbol}_{expiry.date()}_P"
+                    self.current_session_options[key] = put_chain
             
             logger.info(f"Pre-fetched {len(self.current_session_options)} option chains")
             
@@ -178,22 +173,31 @@ class UnifiedMarketData:
         if cached:
             return cached
         
-        # Fetch from API
+        # Fetch from API using snapshots
         try:
-            # Option contracts API not available - use snapshots instead
-            logger.warning("get_option_chain not fully implemented - using mock data")
-            return {}
+            # Get current SPY price
+            spy_quote = self.get_spy_quote()
+            current_price = spy_quote['price']
             
+            # Calculate ATM strike range (within 2% of current price)
+            min_strike = int(current_price * 0.98)
+            max_strike = int(current_price * 1.02)
+            
+            # Build list of potential option symbols
             options = []
-            for contract in contracts:
-                if (option_type == 'CALL' and contract.call_or_put == 'C') or \
-                   (option_type == 'PUT' and contract.call_or_put == 'P'):
-                    options.append({
-                        'contract_symbol': contract.symbol,
-                        'strike': float(contract.strike_price),
-                        'expiration': contract.expiration_date.isoformat(),
-                        'option_type': 'CALL' if contract.call_or_put == 'C' else 'PUT'
-                    })
+            exp_str = expiration.strftime('%y%m%d')
+            
+            for strike in range(min_strike, max_strike + 1):
+                # Format: SPY231215C400 (SPY + YYMMDD + C/P + Strike)
+                opt_type = 'C' if option_type == 'CALL' else 'P'
+                contract_symbol = f"SPY{exp_str}{opt_type}{strike:03d}000"
+                
+                options.append({
+                    'contract_symbol': contract_symbol,
+                    'strike': float(strike),
+                    'expiration': expiration.isoformat(),
+                    'option_type': option_type
+                })
             
             self.option_cache.set(key, options)
             return options
@@ -411,10 +415,15 @@ class UnifiedMarketData:
         return pd.DataFrame()
     
     def _get_weekly_expirations(self, num_weeks: int = 3) -> List[datetime]:
-        """Get next N weekly option expirations"""
+        """Get next N weekly option expirations including 0DTE"""
         expirations = []
         today = datetime.now()
         
+        # Add today if it's a weekday and before 4 PM (0DTE)
+        if today.weekday() < 5 and today.hour < 16:
+            expirations.append(today)
+        
+        # Add weekly expirations
         for i in range(num_weeks):
             days_ahead = i * 7
             target_date = today + timedelta(days=days_ahead)
@@ -425,9 +434,10 @@ class UnifiedMarketData:
                 days_until_friday = 7
             
             expiry = target_date + timedelta(days=days_until_friday)
-            expirations.append(expiry)
+            if expiry.date() != today.date():  # Don't duplicate today
+                expirations.append(expiry)
         
-        return expirations
+        return expirations[:num_weeks]
     
     def clear_caches(self):
         """Clear all caches - useful at session start"""
