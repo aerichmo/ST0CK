@@ -138,7 +138,7 @@ class UnifiedMarketData:
             return cached
         
         try:
-            request = StockQuotesRequest(symbol_or_symbols="SPY", limit=1)
+            request = StockQuotesRequest(symbol_or_symbols="SPY", limit=1, feed='iex')
             quotes = self.stock_client.get_stock_quotes(request)
             
             if "SPY" in quotes and quotes["SPY"]:
@@ -381,7 +381,8 @@ class UnifiedMarketData:
                 timeframe=TimeFrame.Minute,
                 start=start,
                 end=end,
-                limit=1000
+                limit=1000,
+                feed='iex'  # Use IEX feed to avoid SIP subscription requirement
             )
             
             bars = self.stock_client.get_stock_bars(request)

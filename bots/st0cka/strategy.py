@@ -41,12 +41,12 @@ class ST0CKAStrategy(BaseStrategy):
         now = datetime.now()
         market_open = datetime.now().replace(hour=9, minute=30, second=0, microsecond=0)
         
-        # Only enter within first minute of market open
+        # Only enter within first 30 minutes of market open (9:30-10:00 AM ET)
         time_since_open = (now - market_open).total_seconds()
         
         if (not self.has_position and 
             not self.position_entered_today and 
-            0 <= time_since_open <= 60):  # Within first minute
+            0 <= time_since_open <= 1800):  # Within first 30 minutes (1800 seconds)
             logger.info(f"[{self.bot_id}] Market open detected, generating BUY signal for SPY")
             return Signal('LONG', strength=1.0, metadata={'symbol': 'SPY', 'reason': 'market_open'})
         

@@ -32,7 +32,7 @@ class AlpacaMarketDataProvider:
     def get_stock_quote(self, symbol: str) -> Dict[str, float]:
         """Get current stock quote from Alpaca."""
         try:
-            request = StockLatestQuoteRequest(symbol_or_symbols=symbol)
+            request = StockLatestQuoteRequest(symbol_or_symbols=symbol, feed='iex')
             quote = self.client.get_stock_latest_quote(request)
             
             if symbol in quote:
@@ -85,7 +85,8 @@ class AlpacaMarketDataProvider:
                 timeframe=alpaca_timeframe,
                 start=start,
                 end=end,
-                limit=limit
+                limit=limit,
+                feed='iex'
             )
             
             # Get bars

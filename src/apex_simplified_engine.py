@@ -43,6 +43,11 @@ class APEXSimplifiedEngine(FastTradingEngine):
         
         logger.info(f"[{self.bot_id}] APEX Simplified Engine initialized")
     
+    def is_in_active_window(self) -> bool:
+        """Check if we're in the active trading window"""
+        current_time = datetime.now().time()
+        return self.window_start <= current_time <= self.window_end
+    
     def _process_signal(self, signal: Dict, spy_quote: Dict):
         """Process trading signal"""
         logger.info(f"[{self.bot_id}] Processing {signal.get('metadata', {}).get('signal_type')} signal")

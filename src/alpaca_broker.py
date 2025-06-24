@@ -300,7 +300,8 @@ class AlpacaBroker(BrokerInterface):
                 underlying_symbol = contract_symbol[:3]  # Extract SPY from option symbol
                 stock_request = StockQuotesRequest(
                     symbol_or_symbols=underlying_symbol,
-                    limit=1
+                    limit=1,
+                    feed='iex'
                 )
                 stock_quotes = self.data_client.get_stock_quotes(stock_request)
                 underlying_price = float(stock_quotes[underlying_symbol][0].ask_price) if underlying_symbol in stock_quotes else 0

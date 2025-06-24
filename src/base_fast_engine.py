@@ -4,7 +4,7 @@ Minimal overhead, maximum speed
 """
 
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Dict, Optional
 import pandas as pd
 
@@ -52,11 +52,16 @@ class FastTradingEngine:
         self.last_signal_time = None
         self.opening_range_calculated = False
         
-        # Trading window
-        self.window_start = time(9, 40)
-        self.window_end = time(10, 30)
+        # Trading window - use config if available, otherwise default
+        if 'trading_window' in config:
+            self.window_start = config['trading_window'].get('start', time(9, 40))
+            self.window_end = config['trading_window'].get('end', time(10, 30))
+        else:
+            # Default trading window
+            self.window_start = time(9, 40)
+            self.window_end = time(10, 30)
         
-        logger.info(f"FastTradingEngine initialized with ${capital:,.2f}")
+        logger.info(f"FastTradingEngine initialized with ${capital:,.2f}, trading window: {self.window_start.strftime('%I:%M %p')} - {self.window_end.strftime('%I:%M %p')}")
     
     def run_trading_cycle(self):
         """Single trading cycle - ultra fast"""
@@ -244,8 +249,9 @@ class FastTradingEngine:
             elif position['signal']['type'] == 'SHORT' and current_price >= position['stop_loss']:
                 positions_to_close.append((position_id, 'STOP_LOSS'))
             
-            # Check time stop (close all by 10:25)
-            elif datetime.now().time() >= time(10, 25):
+            # Check time stop (close all 5 minutes before window end)
+            close_time = datetime.combine(datetime.today(), self.window_end) - timedelta(minutes=5)
+            if datetime.now().time() >= close_time.time():
                 positions_to_close.append((position_id, 'TIME_EXIT'))
             
             # Check profit target

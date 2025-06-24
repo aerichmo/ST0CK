@@ -208,7 +208,7 @@ class BotLauncher:
                             last_status_log = datetime.now()
                     
                     # Sleep interval based on trading window
-                    if self.engine.is_in_active_window():
+                    if self.engine and hasattr(self.engine, 'is_in_active_window') and self.engine.is_in_active_window():
                         time.sleep(1)  # 1 second during active trading
                     else:
                         time.sleep(5)  # 5 seconds outside window
