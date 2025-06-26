@@ -72,10 +72,11 @@ class ST0CKGStrategy(BaseStrategy):
         """Check for break-and-retest entry"""
         current_time = datetime.now()
         
-        # Wait for first 5-min bar (9:35)
+        # Wait for first 5-min bar (9:35) or if we're past that time
         if not self.first_bar_done:
-            if current_time.hour == 9 and current_time.minute >= 35:
+            if (current_time.hour == 9 and current_time.minute >= 35) or current_time.hour >= 10:
                 self.first_bar_done = True
+                logger.info(f"[{self.bot_id}] First bar check at {current_time.strftime('%I:%M %p')}")
                 
                 # Set bias based on close
                 if current_price > self.pdh + 0.10:
