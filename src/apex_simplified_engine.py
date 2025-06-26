@@ -41,6 +41,11 @@ class APEXSimplifiedEngine(FastTradingEngine):
         # Override database with multi-bot version
         self.db = self.multi_db
         
+        # Initialize ST0CKG strategy
+        from bots.st0ckg.strategy import ST0CKGStrategy
+        self.strategy = ST0CKGStrategy(self.bot_id, config)
+        self.strategy.initialize(self.market_data)
+        
         logger.info(f"[{self.bot_id}] APEX Simplified Engine initialized")
     
     def is_in_active_window(self) -> bool:

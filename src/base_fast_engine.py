@@ -68,6 +68,14 @@ class FastTradingEngine:
         try:
             current_time = datetime.now().time()
             
+            # Log every 30 seconds
+            if not hasattr(self, 'last_log_time'):
+                self.last_log_time = datetime.now()
+            
+            if (datetime.now() - self.last_log_time).seconds >= 30:
+                logger.info(f"[{self.bot_id}] Trading cycle at {current_time.strftime('%H:%M:%S')}")
+                self.last_log_time = datetime.now()
+            
             # Calculate opening range once
             if not self.opening_range_calculated and current_time >= time(9, 40):
                 self._calculate_opening_range()
@@ -88,10 +96,16 @@ class FastTradingEngine:
             if spy_quote['price'] <= 0:
                 return
             
-            # Check for signal
-            signal = self._check_for_signal(spy_quote)
-            if signal:
-                self._process_signal(signal, spy_quote)
+            # Check for signal from strategy
+            if hasattr(self, 'strategy'):
+                signal = self.strategy.check_entry_conditions(spy_quote['price'], {'spy_quote': spy_quote})
+                if signal:
+                    self._process_signal(signal, spy_quote)
+            else:
+                # Fallback to built-in signal checking
+                signal = self._check_for_signal(spy_quote)
+                if signal:
+                    self._process_signal(signal, spy_quote)
             
             # Monitor positions
             self._monitor_positions()
