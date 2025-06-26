@@ -1,7 +1,7 @@
 """
 ST0CKA - Super Simple SPY Trading
-Buy 1 share between 9:30-12:00
-Sell 1 share between 12:00-3:00 for 1 cent profit
+Buy 1 share between 9:30-10:15
+Sell 1 share between 10:15-11:00 for 1 cent profit
 """
 from datetime import datetime
 import logging
@@ -32,15 +32,15 @@ class ST0CKAStrategy(BaseStrategy):
         return True
     
     def check_entry_conditions(self, current_price: float, market_data: dict):
-        """Should we buy? Only between 9:30-12:00 ET"""
+        """Should we buy? Only between 9:30-10:15 ET"""
         # What time is it in Eastern Time?
         et_tz = pytz.timezone('America/New_York')
         current_time = datetime.now(et_tz)
         hour = current_time.hour
         minute = current_time.minute
         
-        # Is it between 9:30 and 12:00 ET?
-        is_buy_time = (hour == 9 and minute >= 30) or (hour == 10) or (hour == 11)
+        # Is it between 9:30 and 10:15 ET?
+        is_buy_time = (hour == 9 and minute >= 30) or (hour == 10 and minute <= 15)
         
         logger.info(f"[{self.bot_id}] Check entry - ET Time: {hour:02d}:{minute:02d}, is_buy_time: {is_buy_time}, bought_today: {self.bought_today}")
         
@@ -64,15 +64,15 @@ class ST0CKAStrategy(BaseStrategy):
         }
     
     def check_exit_conditions(self, position: dict, current_price: float, market_data: dict):
-        """Should we sell? Only between 12:00-3:00 ET"""
+        """Should we sell? Only between 10:15-11:00 ET"""
         # What time is it in Eastern Time?
         et_tz = pytz.timezone('America/New_York')
         current_time = datetime.now(et_tz)
         hour = current_time.hour
         minute = current_time.minute
         
-        # Is it between 12:00 and 3:00 ET?
-        is_sell_time = (hour == 12) or (hour == 13) or (hour == 14)
+        # Is it between 10:15 and 11:00 ET?
+        is_sell_time = (hour == 10 and minute >= 15) or (hour == 11 and minute == 0)
         
         if is_sell_time and self.buy_price:
             # Did we make our penny?
@@ -80,8 +80,8 @@ class ST0CKAStrategy(BaseStrategy):
                 logger.info(f"[{self.bot_id}] Made our penny! Selling!")
                 return True, "profit"
             
-            # Is it almost 3:00 and we're not losing money?
-            if hour == 14 and minute >= 55 and current_price >= self.buy_price:
+            # Is it almost 11:00 and we're not losing money?
+            if hour == 10 and minute >= 55 and current_price >= self.buy_price:
                 logger.info(f"[{self.bot_id}] Time's up, selling at break-even or small profit")
                 return True, "time_up"
         

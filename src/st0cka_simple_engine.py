@@ -107,6 +107,14 @@ class ST0CKASimpleEngine:
         """Main trading loop - super simple"""
         logger.info("ST0CKA run_trading_cycle called")
         try:
+            # Check if we should shut down (after 11:00 AM ET)
+            et_tz = pytz.timezone('America/New_York')
+            now = datetime.now(et_tz)
+            if now.hour >= 11 and now.minute > 0:
+                logger.info(f"Past 11:00 AM ET ({now.strftime('%I:%M %p')}), shutting down ST0CKA")
+                self.shutdown()
+                return
+            
             # Log current state
             et_tz = pytz.timezone('America/New_York')
             now = datetime.now(et_tz)
@@ -292,7 +300,7 @@ class ST0CKASimpleEngine:
         logger.info(f"Sold SPY at ${sell_price:.2f}, made ${pnl:.2f}")
     
     def shutdown(self):
-        """Stop trading"""
+        """Stop trading and exit gracefully"""
         logger.info("Shutting down ST0CKA engine")
         
         # Sell if we still have SPY
@@ -303,3 +311,7 @@ class ST0CKASimpleEngine:
             self.broker.disconnect()
             
         logger.info("ST0CKA engine stopped")
+        
+        # Exit the process
+        import sys
+        sys.exit(0)

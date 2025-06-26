@@ -9,11 +9,11 @@ ST0CKA_CONFIG = {
     'strategy_name': 'ST0CKA - SPY $0.01 Scalper',
     'active': True,  # Enable the strategy
     
-    # Trading window - full morning session for buy/sell windows
+    # Trading window - morning session only
     'trading_window': {
         'start': time(9, 30),  # Market open
         'end': time(11, 0),    # End of sell window
-        'focus': 'SPY buy 9:30-10:00, sell 10:00-11:00'
+        'focus': 'SPY buy 9:30-10:15, sell 10:15-11:00'
     },
     
     # Position sizing - minimal risk
@@ -31,10 +31,10 @@ ST0CKA_CONFIG = {
     'stop_loss': 5.00,      # $5.00 stop loss for catastrophic protection
     'buy_window': {
         'start': time(9, 30),
-        'end': time(10, 0)
+        'end': time(10, 15)
     },
     'sell_window': {
-        'start': time(10, 0),
+        'start': time(10, 15),
         'end': time(11, 0)
     },
     

@@ -10,7 +10,7 @@ on:
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 480  # 8 hour timeout
+    timeout-minutes: 120  # 2 hour timeout (9:20 AM to 11:20 AM)
     
     steps:
     - uses: actions/checkout@v3
