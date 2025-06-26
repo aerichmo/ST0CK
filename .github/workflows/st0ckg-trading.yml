@@ -41,7 +41,7 @@ jobs:
     
     - name: Run ST0CKG Bot
       run: |
-        echo "Starting ST0CKG APEX Strategy Bot..."
+        echo "Starting ST0CKG AAGRAY Strategy Bot..."
         mkdir -p logs
         python main_multi.py st0ckg
       env:

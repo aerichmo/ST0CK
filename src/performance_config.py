@@ -1,5 +1,5 @@
 """
-Performance configuration for APEX trading system
+Performance configuration for AAGRAY trading system
 Optimized for speed and efficiency
 """
 import logging
@@ -23,7 +23,7 @@ LOGGING_CONFIG = {
         },
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': f'logs/apex_{os.getpid()}.log',
+            'filename': f'logs/aagray_{os.getpid()}.log',
             'maxBytes': 10485760,  # 10MB
             'backupCount': 3,
             'formatter': 'compact',
@@ -33,12 +33,12 @@ LOGGING_CONFIG = {
     'loggers': {
         # Critical path - minimize logging
         'src.unified_market_data': {'level': 'WARNING'},
-        'src.apex_signals': {'level': 'WARNING'},
+        'src.aagray_signals': {'level': 'WARNING'},
         'src.market_microstructure': {'level': 'WARNING'},
-        'src.apex_options_selector': {'level': 'WARNING'},
+        'src.aagray_options_selector': {'level': 'WARNING'},
         
         # Important operations - keep INFO
-        'src.apex_engine': {'level': 'INFO'},
+        'src.aagray_engine': {'level': 'INFO'},
         'bots.st0ckg.strategy': {'level': 'INFO'},
         
         # Third-party - suppress noise
@@ -73,7 +73,7 @@ PERFORMANCE_SETTINGS = {
     'memory_warning_threshold': 500 * 1024 * 1024,  # 500MB
 }
 
-def configure_logging(bot_id: str = 'apex'):
+def configure_logging(bot_id: str = 'aagray'):
     """Apply optimized logging configuration"""
     import logging.config
     import copy

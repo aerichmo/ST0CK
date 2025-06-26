@@ -109,9 +109,9 @@ class BotLauncher:
         """Create trading engine for this bot"""
         try:
             if self.bot_id == 'st0ckg':
-                from src.apex_simplified_engine import APEXSimplifiedEngine
+                from src.aagray_simplified_engine import AAGRAYSimplifiedEngine
                 
-                self.engine = APEXSimplifiedEngine(
+                self.engine = AAGRAYSimplifiedEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
