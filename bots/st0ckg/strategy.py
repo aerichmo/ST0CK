@@ -72,6 +72,11 @@ class ST0CKGStrategy(BaseStrategy):
         """Check for break-and-retest entry"""
         current_time = datetime.now()
         
+        # Log entry check
+        if not hasattr(self, '_last_entry_log') or (datetime.now() - self._last_entry_log).seconds >= 60:
+            logger.info(f"[{self.bot_id}] Checking entry at {current_time.strftime('%H:%M:%S')}, SPY: ${current_price:.2f}")
+            self._last_entry_log = datetime.now()
+        
         # Wait for first 5-min bar (9:35) or if we're past that time
         if not self.first_bar_done:
             if (current_time.hour == 9 and current_time.minute >= 35) or current_time.hour >= 10:

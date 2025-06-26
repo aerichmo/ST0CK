@@ -94,14 +94,19 @@ class FastTradingEngine:
             
             # Get current SPY data
             spy_quote = self.market_data.get_spy_quote()
-            if spy_quote['price'] <= 0:
+            if not spy_quote or spy_quote.get('price', 0) <= 0:
+                logger.debug(f"[{self.bot_id}] No valid SPY quote: {spy_quote}")
                 return
             
             # Check for signal from strategy
             if hasattr(self, 'strategy'):
-                signal = self.strategy.check_entry_conditions(spy_quote['price'], {'spy_quote': spy_quote})
-                if signal:
-                    self._process_signal(signal, spy_quote)
+                try:
+                    signal = self.strategy.check_entry_conditions(spy_quote['price'], {'spy_quote': spy_quote})
+                    if signal:
+                        logger.info(f"[{self.bot_id}] Got signal: {signal}")
+                        self._process_signal(signal, spy_quote)
+                except Exception as e:
+                    logger.error(f"[{self.bot_id}] Error checking entry conditions: {e}", exc_info=True)
             else:
                 # Fallback to built-in signal checking
                 signal = self._check_for_signal(spy_quote)
