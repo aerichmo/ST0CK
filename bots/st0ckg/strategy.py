@@ -1,11 +1,10 @@
 """
-APEX Simplified - Lean SPY Options Strategy
-Focus on execution, not complexity
+ST0CKG - Battle Lines Strategy
+Trade SPY 0-DTE options at key levels
 """
-from datetime import datetime, time, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, time
+from typing import Dict, Optional
 import logging
-import numpy as np
 
 import sys
 import os
@@ -16,418 +15,256 @@ from bots.base.strategy import BaseStrategy, Signal
 logger = logging.getLogger(__name__)
 
 
-class APEXSimplifiedStrategy(BaseStrategy):
-    """Simplified APEX strategy - momentum breakout + VWAP mean reversion"""
+class ST0CKGStrategy(BaseStrategy):
+    """Battle Lines 0-DTE Strategy"""
     
     def __init__(self, bot_id: str, config: Dict):
         super().__init__(bot_id, config)
         
-        # Market data
-        self.market_data = None
+        # Battle lines (set each morning)
+        self.pdh = 0  # Previous Day High
+        self.pdl = 0  # Previous Day Low
+        self.overnight_high = 0  # ES overnight high
+        self.overnight_low = 0   # ES overnight low
+        self.premarket_high = 0  # Pre-market high
+        self.premarket_low = 0   # Pre-market low
         
-        # Technical indicators
-        self.current_ema = None
-        self.current_atr = None
-        self.current_vwap = None
-        self.avg_volume = None
-        
-        # Track daily stats
-        self.trades_today = 0
-        self.consecutive_losses = 0
+        # Trading state
+        self.bias = None  # 'long', 'short', or None
+        self.position_open = False
+        self.entry_price = 0
+        self.entry_level = 0  # Which battle line we entered at
+        self.stop_price = 0
+        self.position_size = 'full'  # 'full' or 'half'
+        self.wins = 0
+        self.losses = 0
         self.daily_pnl = 0
         
-    def initialize(self, market_data_provider) -> bool:
-        """Initialize strategy with market data provider"""
-        try:
-            self.market_data = market_data_provider
-            self.is_initialized = True
-            logger.info(f"[{self.bot_id}] APEX Simplified initialized")
-            return True
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Initialization failed: {e}")
-            return False
-    
-    async def should_generate_signals(self) -> bool:
-        """Check if we should look for signals"""
-        now = datetime.now()
-        current_time = now.time()
+        # Wait for first 5-min bar
+        self.first_bar_done = False
         
-        # Check trading window
-        if not (self.config['trading_window']['start'] <= current_time <= 
-                self.config['trading_window']['end']):
-            return False
-            
-        # Check daily limits
-        if self.trades_today >= self.config['max_trades_per_day']:
-            return False
-            
-        if self.consecutive_losses >= self.config['max_consecutive_losses']:
-            logger.warning(f"[{self.bot_id}] Max consecutive losses reached")
-            return False
-            
-        if abs(self.daily_pnl) >= self.config['max_daily_loss']:
-            logger.warning(f"[{self.bot_id}] Daily loss limit reached")
-            return False
-            
+        logger.info(f"[{self.bot_id}] Battle Lines strategy initialized")
+        
+    def initialize(self, market_data_provider) -> bool:
+        """Initialize strategy"""
+        self.market_data = market_data_provider
+        self.is_initialized = True
+        
+        # TODO: Set battle lines from market data
+        # For now, use dummy values
+        self.set_battle_lines(580, 576, 579, 577, 580.5, 576.5)
+        
         return True
     
-    async def generate_signals(self) -> List[Signal]:
-        """Generate trading signals - simplified approach"""
-        try:
-            if not await self.should_generate_signals():
-                return []
-                
-            # Update indicators
-            await self._update_indicators()
-            
-            # Check basic filters
-            if not self._check_filters():
-                return []
-                
-            signals = []
-            
-            # Check momentum breakout
-            momentum_signal = await self._check_momentum_breakout()
-            if momentum_signal:
-                signals.append(momentum_signal)
-                
-            # Check VWAP mean reversion
-            vwap_signal = await self._check_vwap_reversion()
-            if vwap_signal:
-                signals.append(vwap_signal)
-                
-            # Limit concurrent positions
-            max_new = self.config['max_concurrent_positions'] - len(self.active_positions)
-            return signals[:max_new]
-            
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Signal generation failed: {e}")
-            return []
+    def set_battle_lines(self, pdh, pdl, es_high, es_low, pre_high, pre_low):
+        """Set the 6 battle lines before market open"""
+        self.pdh = pdh
+        self.pdl = pdl
+        self.overnight_high = es_high
+        self.overnight_low = es_low
+        self.premarket_high = pre_high
+        self.premarket_low = pre_low
+        
+        logger.info(f"[{self.bot_id}] Battle lines: PDH={pdh:.2f}, PDL={pdl:.2f}, "
+                   f"ES={es_low:.2f}-{es_high:.2f}, PRE={pre_low:.2f}-{pre_high:.2f}")
     
-    async def _update_indicators(self):
-        """Update technical indicators"""
-        try:
-            # Get recent bars
-            bars = await self.market_data.get_bars('SPY', '1Min', limit=30)
-            if len(bars) < 20:
-                return
+    def check_entry_conditions(self, current_price: float, market_data: Dict) -> Optional[Signal]:
+        """Check for break-and-retest entry"""
+        current_time = datetime.now()
+        
+        # Wait for first 5-min bar (9:35)
+        if not self.first_bar_done:
+            if current_time.hour == 9 and current_time.minute >= 35:
+                self.first_bar_done = True
                 
-            # Calculate indicators
-            closes = [bar.close for bar in bars]
-            volumes = [bar.volume for bar in bars]
+                # Set bias based on close
+                if current_price > self.pdh + 0.10:
+                    self.bias = 'long'
+                    logger.info(f"[{self.bot_id}] LONG bias: SPY {current_price:.2f} > PDH+0.10 {self.pdh+0.10:.2f}")
+                elif current_price < self.pdl - 0.10:
+                    self.bias = 'short'
+                    logger.info(f"[{self.bot_id}] SHORT bias: SPY {current_price:.2f} < PDL-0.10 {self.pdl-0.10:.2f}")
+                else:
+                    self.bias = None
+                    logger.info(f"[{self.bot_id}] No bias - price {current_price:.2f} inside band")
+            return None
+        
+        # Check if we should trade
+        if not self.bias or self.position_open:
+            return None
             
-            # EMA
-            self.current_ema = self._calculate_ema(closes, self.config['indicators']['ema_period'])
-            
-            # ATR
-            self.current_atr = self._calculate_atr(bars, self.config['indicators']['atr_period'])
-            
-            # Average volume
-            self.avg_volume = np.mean(volumes[-self.config['indicators']['volume_period']:])
-            
-            # VWAP (simplified - just for current day)
-            if self.config['indicators']['vwap_enabled']:
-                self.current_vwap = await self._calculate_vwap()
-                
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Indicator update failed: {e}")
-    
-    def _check_filters(self) -> bool:
-        """Check if market conditions allow trading"""
-        try:
-            # Check ATR
-            if self.current_atr and self.current_atr < self.config['filters']['min_atr']:
-                return False
-                
-            # Would check VIX here if needed
-            # For now, assume conditions are ok
-            return True
-            
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Filter check failed: {e}")
-            return False
-    
-    async def _check_momentum_breakout(self) -> Optional[Signal]:
-        """Simple momentum breakout signal"""
-        try:
-            config = self.config['entry_signals']['momentum_breakout']
-            if not config['enabled']:
-                return None
-                
-            # Get recent price action
-            bars = await self.market_data.get_bars('SPY', '1Min', limit=5)
-            if len(bars) < config['confirmation_bars'] + 1:
-                return None
-                
-            current_price = bars[-1].close
-            
-            # Check for momentum move
-            price_change = (current_price - bars[-3].close) / bars[-3].close
-            
-            # Need significant move
-            if abs(price_change) < config['min_move']:
-                return None
-                
-            # Check volume confirmation
-            current_volume = bars[-1].volume
-            if current_volume < self.avg_volume * config['volume_confirmation']:
-                return None
-                
-            # Determine direction
-            direction = 'buy' if price_change > 0 else 'sell'
-            
-            # Check trend filter
-            if self.config['filters']['trend_filter'] and self.current_ema:
-                if direction == 'buy' and current_price < self.current_ema:
-                    return None
-                elif direction == 'sell' and current_price > self.current_ema:
-                    return None
-                    
-            # Calculate stops and targets
-            stop_distance = self.current_atr * self.config['exit_rules']['stop_loss_atr']
-            target_distance = self.current_atr * self.config['exit_rules']['profit_target_atr']
-            
-            if direction == 'buy':
-                stop_price = current_price - stop_distance
-                target_price = current_price + target_distance
-            else:
-                stop_price = current_price + stop_distance
-                target_price = current_price - target_distance
-                
+        # Check daily limits
+        if self.wins >= 2:
+            logger.info(f"[{self.bot_id}] Daily win limit reached (2 wins)")
+            return None
+        if self.losses >= 2:
+            logger.info(f"[{self.bot_id}] Daily loss limit reached (-2R)")
+            return None
+        
+        # Check for break-and-retest setup
+        if self._check_break_retest(current_price, market_data):
+            direction = 'buy' if self.bias == 'long' else 'sell'
             return Signal(
-                symbol='SPY',
-                direction=direction,
-                strength=0.7,  # Fixed strength for simplicity
+                direction=direction.upper(),
+                strength=1.0,
                 metadata={
-                    'signal_type': 'momentum_breakout',
-                    'entry_price': current_price,
-                    'stop_price': stop_price,
-                    'target_price': target_price,
-                    'atr': self.current_atr
+                    'entry_level': self.entry_level,
+                    'bias': self.bias
                 }
             )
             
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Momentum check failed: {e}")
-            return None
+        return None
     
-    async def _check_vwap_reversion(self) -> Optional[Signal]:
-        """Simple VWAP mean reversion signal"""
-        try:
-            config = self.config['entry_signals']['vwap_mean_reversion']
-            if not config['enabled'] or not self.current_vwap:
-                return None
-                
-            # Get current price
-            quote = await self.market_data.get_quote('SPY')
-            if not quote:
-                return None
-                
-            current_price = quote.last
-            
-            # Calculate distance from VWAP
-            vwap_distance = abs(current_price - self.current_vwap) / self.current_vwap
-            
-            # Check if within range
-            if vwap_distance < config['min_distance'] or vwap_distance > config['max_distance']:
-                return None
-                
-            # Check volume
-            bars = await self.market_data.get_bars('SPY', '1Min', limit=1)
-            if bars and bars[0].volume < self.avg_volume * config['volume_confirmation']:
-                return None
-                
-            # Mean reversion direction (opposite of stretch)
-            direction = 'buy' if current_price < self.current_vwap else 'sell'
-            
-            # VWAP acts as target, stop beyond stretch
-            stop_distance = self.current_atr * self.config['exit_rules']['stop_loss_atr']
-            
-            if direction == 'buy':
-                stop_price = current_price - stop_distance
-                target_price = self.current_vwap  # Revert to VWAP
-            else:
-                stop_price = current_price + stop_distance
-                target_price = self.current_vwap
-                
-            return Signal(
-                symbol='SPY',
-                direction=direction,
-                strength=0.6,
-                metadata={
-                    'signal_type': 'vwap_reversion',
-                    'entry_price': current_price,
-                    'stop_price': stop_price,
-                    'target_price': target_price,
-                    'vwap': self.current_vwap,
-                    'atr': self.current_atr
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] VWAP check failed: {e}")
-            return None
-    
-    def calculate_position_size(self, signal: Signal, entry_price: float) -> int:
-        """Simple position sizing - flat risk percentage"""
-        try:
-            account_value = self.config['capital']  # In production, get from broker
-            risk_amount = account_value * self.config['risk_per_trade']
-            
-            # Get stop distance from signal
-            stop_price = signal.metadata.get('stop_price', entry_price * 0.99)
-            stop_distance = abs(entry_price - stop_price)
-            
-            if stop_distance <= 0:
-                return 0
-                
-            # Calculate contracts
-            contracts = int(risk_amount / (stop_distance * 100))
-            
-            # Apply position size limit
-            max_contracts = int(account_value * self.config['max_position_size'] / (entry_price * 100))
-            contracts = min(contracts, max_contracts)
-            
-            logger.info(f"[{self.bot_id}] Position size: {contracts} contracts, "
-                       f"Risk: ${risk_amount:.0f}")
-                       
-            return contracts
-            
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Position sizing failed: {e}")
-            return 0
-    
-    def should_exit_position(self, position: Dict) -> Tuple[bool, str]:
-        """Simple exit logic"""
-        try:
-            entry_price = position['entry_price']
-            current_price = position['current_price']
-            stop_price = position.get('stop_price')
-            target_price = position.get('target_price')
-            entry_time = position.get('entry_time', datetime.now())
-            
-            # Stop loss
-            if stop_price:
-                if position['direction'] == 'buy' and current_price <= stop_price:
-                    return True, "stop_loss"
-                elif position['direction'] == 'sell' and current_price >= stop_price:
-                    return True, "stop_loss"
-                    
-            # Profit target
-            if target_price:
-                if position['direction'] == 'buy' and current_price >= target_price:
-                    return True, "profit_target"
-                elif position['direction'] == 'sell' and current_price <= target_price:
-                    return True, "profit_target"
-                    
-            # Time stop
-            minutes_held = (datetime.now() - entry_time).total_seconds() / 60
-            if minutes_held > self.config['exit_rules']['time_stop_minutes']:
-                return True, "time_stop"
-                
-            # Trailing stop
-            if self.config['exit_rules']['trailing_stop_activation']:
-                self._check_trailing_stop(position)
-                
-            return False, ""
-            
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Exit check failed: {e}")
-            return False, ""
-    
-    def _check_trailing_stop(self, position: Dict) -> bool:
-        """Simple trailing stop logic"""
-        entry_price = position['entry_price']
-        current_price = position['current_price']
-        stop_price = position.get('stop_price', entry_price)
+    def _check_break_retest(self, price: float, market_data: Dict) -> bool:
+        """Check for break-and-retest of battle lines"""
+        # Get battle lines as list
+        lines = [self.pdh, self.pdl, self.overnight_high, 
+                self.overnight_low, self.premarket_high, self.premarket_low]
         
-        # Calculate profit in R
-        risk = abs(entry_price - stop_price)
-        profit = abs(current_price - entry_price)
-        r_multiple = profit / risk if risk > 0 else 0
+        # For simplicity, just check if we're near a level
+        # In real implementation, would track candle patterns
         
-        # Activate trailing stop
-        if r_multiple >= self.config['exit_rules']['trailing_stop_activation']:
-            trail_distance = risk * self.config['exit_rules']['trailing_stop_distance']
-            
-            if position['direction'] == 'buy':
-                new_stop = current_price - trail_distance
-                position['stop_price'] = max(position.get('stop_price', 0), new_stop)
-            else:
-                new_stop = current_price + trail_distance
-                position['stop_price'] = min(position.get('stop_price', float('inf')), new_stop)
+        if self.bias == 'long':
+            # Find resistance lines just above current price
+            resist_lines = [l for l in lines if price < l < price + 0.50]
+            if resist_lines:
+                self.entry_level = min(resist_lines)
+                logger.info(f"[{self.bot_id}] Potential long entry at battle line {self.entry_level:.2f}")
+                return True
+                
+        else:  # short bias
+            # Find support lines just below current price
+            support_lines = [l for l in lines if price - 0.50 < l < price]
+            if support_lines:
+                self.entry_level = max(support_lines)
+                logger.info(f"[{self.bot_id}] Potential short entry at battle line {self.entry_level:.2f}")
+                return True
                 
         return False
     
-    def update_position_tracking(self, position: Dict, fill_price: float, action: str):
-        """Update tracking after position changes"""
-        try:
-            if action == "exit":
-                pnl = position.get('realized_pnl', 0)
-                self.daily_pnl += pnl
-                
-                if pnl > 0:
-                    self.consecutive_losses = 0
-                else:
-                    self.consecutive_losses += 1
-                    
-                self.trades_today += 1
-                
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] Tracking update failed: {e}")
-    
-    # Helper methods
-    
-    def _calculate_ema(self, prices: List[float], period: int) -> float:
-        """Calculate exponential moving average"""
-        if len(prices) < period:
-            return prices[-1]
-            
-        multiplier = 2 / (period + 1)
-        ema = prices[-period]  # Start with SMA
+    def calculate_position_size(self, signal: Signal, account_balance: float, 
+                              current_price: float) -> int:
+        """Size for 1% risk on stop"""
+        # Stop is 0.05-0.15 past structure
+        stop_distance = 0.10  # Default SPY stop distance
         
-        for price in prices[-period+1:]:
-            ema = (price - ema) * multiplier + ema
-            
-        return ema
+        # Option delta ≈ 0.30
+        option_delta = 0.30
+        
+        # 1% risk
+        max_risk = account_balance * 0.01
+        
+        # Assuming $5 option price for calculation
+        option_price = 5.00
+        option_risk_per_contract = stop_distance * option_delta * 100
+        
+        # Contracts = risk / option_risk
+        contracts = int(max_risk / option_risk_per_contract)
+        
+        return max(1, min(contracts, 10))  # 1-10 contracts
     
-    def _calculate_atr(self, bars: List, period: int) -> float:
-        """Calculate Average True Range"""
-        if len(bars) < 2:
-            return 1.0
+    def get_exit_levels(self, signal: Signal, entry_price: float) -> Dict:
+        """Set exit levels"""
+        if signal.metadata['bias'] == 'long':
+            stop = entry_price - 0.10
+        else:
+            stop = entry_price + 0.10
             
-        true_ranges = []
-        for i in range(1, len(bars)):
-            high = bars[i].high
-            low = bars[i].low
-            prev_close = bars[i-1].close
-            
-            tr = max(
-                high - low,
-                abs(high - prev_close),
-                abs(low - prev_close)
-            )
-            true_ranges.append(tr)
-            
-        return np.mean(true_ranges[-period:]) if true_ranges else 1.0
+        return {
+            'stop_loss': stop,
+            'target_1': None,  # Managed dynamically
+            'target_2': None
+        }
     
-    async def _calculate_vwap(self) -> float:
-        """Calculate simple VWAP for the day"""
-        try:
-            # Get today's bars
-            bars = await self.market_data.get_bars('SPY', '1Min', limit=390)
-            if not bars:
-                return 0
-                
-            cum_volume = 0
-            cum_pv = 0
+    def check_exit_conditions(self, position: Dict, current_price: float, 
+                            market_data: Dict):
+        """Manage stops and targets"""
+        if not self.position_open:
+            return False, ""
+        
+        # Calculate R-multiple
+        if self.bias == 'long':
+            spy_move = current_price - self.entry_price
+        else:
+            spy_move = self.entry_price - current_price
             
-            for bar in bars:
-                cum_volume += bar.volume
-                cum_pv += bar.close * bar.volume
-                
-            return cum_pv / cum_volume if cum_volume > 0 else bars[-1].close
+        # Rough R calculation
+        r_multiple = spy_move / 0.10  # Using 0.10 as stop distance
+        
+        # Stop loss hit?
+        if self.bias == 'long' and current_price <= self.stop_price:
+            return True, "stop_loss"
+        elif self.bias == 'short' and current_price >= self.stop_price:
+            return True, "stop_loss"
             
-        except Exception as e:
-            logger.error(f"[{self.bot_id}] VWAP calculation failed: {e}")
-            return 0
+        # Move stop to breakeven at 1R
+        if r_multiple >= 1.0 and self.stop_price != self.entry_price:
+            self.stop_price = self.entry_price
+            logger.info(f"[{self.bot_id}] Stop moved to breakeven")
+            
+        # Scale half at 1.5R
+        if r_multiple >= 1.5 and self.position_size == 'full':
+            self.position_size = 'half'
+            logger.info(f"[{self.bot_id}] Scaling out half at 1.5R")
+            return True, "scale_half"
+            
+        # Full exit at 3R
+        if r_multiple >= 3.0:
+            return True, "target_3r"
+            
+        # Price re-entered level after breakeven?
+        if self.stop_price == self.entry_price:
+            if self.bias == 'long' and current_price < self.entry_level:
+                return True, "reentry_exit"
+            elif self.bias == 'short' and current_price > self.entry_level:
+                return True, "reentry_exit"
+                
+        return False, ""
+    
+    def get_option_selection_criteria(self, signal: Signal) -> Dict:
+        """Select 0-DTE ATM options"""
+        return {
+            'target_delta': 0.30,
+            'max_dte': 0,
+            'option_type': 'CALL' if signal.direction == 'BUY' else 'PUT'
+        }
+    
+    def on_position_opened(self, position: Dict):
+        """Track position entry"""
+        super().on_position_opened(position)
+        self.position_open = True
+        self.entry_price = position.get('entry_price', 0)
+        self.stop_price = self.entry_price - 0.10 if self.bias == 'long' else self.entry_price + 0.10
+        self.position_size = 'full'
+        
+        logger.info(f"[{self.bot_id}] Position opened at {self.entry_price:.2f}, stop at {self.stop_price:.2f}")
+    
+    def on_position_closed(self, position: Dict, pnl: float, reason: str):
+        """Track wins/losses"""
+        super().on_position_closed(position, pnl, reason)
+        
+        if pnl > 0:
+            self.wins += 1
+            logger.info(f"[{self.bot_id}] WIN #{self.wins}, PnL: ${pnl:.2f}")
+        else:
+            self.losses += 1
+            logger.info(f"[{self.bot_id}] LOSS #{self.losses}, PnL: ${pnl:.2f}")
+            
+        self.position_open = False
+        self.daily_pnl += pnl
+        
+        logger.info(f"[{self.bot_id}] Daily: {self.wins}W-{self.losses}L, PnL: ${self.daily_pnl:.2f}")
+    
+    def should_trade_today(self) -> bool:
+        """Trade every market day until limits hit"""
+        return self.wins < 2 and self.losses < 2
+    
+    def reset_daily_state(self):
+        """Reset for new day"""
+        self.bias = None
+        self.first_bar_done = False
+        self.position_open = False
+        self.wins = 0
+        self.losses = 0
+        self.daily_pnl = 0
+        logger.info(f"[{self.bot_id}] Daily state reset for new trading day")

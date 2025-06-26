@@ -4,7 +4,7 @@ No options, just buy/sell stocks
 """
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, time as datetime_time
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -138,67 +138,116 @@ class SimpleStockEngine:
                 if order_status and order_status['status'] == 'filled':
                     fill_price = order_status['avg_fill_price']
                     
-                    # Place sell limit order for $0.01 profit
-                    sell_price = fill_price + self.config.get('profit_target', 0.01)
+                    # Track position (no immediate sell order for new logic)
+                    self.positions[symbol] = {
+                        'entry_price': fill_price,
+                        'quantity': quantity,
+                        'sell_order_id': None,  # Will place during sell window
+                        'entry_time': datetime.now()
+                    }
                     
-                    sell_order_id = self.broker.place_stock_order(
+                    logger.info(f"Bought {quantity} shares of {symbol} at ${fill_price:.2f}")
+                    
+                    # Notify strategy
+                    self.strategy.on_position_opened({
+                        'symbol': symbol,
+                        'entry_price': fill_price,
+                        'quantity': quantity
+                    })
+                    
+                    # Log to database
+                    self.database.log_trade(
                         symbol=symbol,
+                        action='BUY',
                         quantity=quantity,
-                        side='SELL',
-                        order_type='LIMIT',
-                        limit_price=sell_price,
-                        time_in_force='GTC'
+                        price=fill_price,
+                        order_type='MARKET',
+                        reason='market_open'
                     )
-                    
-                    if sell_order_id:
-                        logger.info(f"Placed GTC sell order at ${sell_price:.2f} (${self.config.get('profit_target', 0.01)} profit)")
-                        
-                        # Track position
-                        self.positions[symbol] = {
-                            'entry_price': fill_price,
-                            'quantity': quantity,
-                            'sell_order_id': sell_order_id,
-                            'entry_time': datetime.now()
-                        }
-                        
-                        # Notify strategy
-                        self.strategy.on_position_opened({
-                            'symbol': symbol,
-                            'entry_price': fill_price,
-                            'quantity': quantity
-                        })
-                        
-                        # Log to database
-                        self.database.log_trade(
-                            symbol=symbol,
-                            action='BUY',
-                            quantity=quantity,
-                            price=fill_price,
-                            order_type='MARKET',
-                            reason='market_open'
-                        )
                         
         except Exception as e:
             logger.error(f"Failed to execute entry: {e}")
             
     def _check_exits(self, current_price):
         """Check exit conditions"""
-        # For ST0CKA, exits are handled by GTC limit orders
-        # Just check if orders have been filled
         for symbol, position in list(self.positions.items()):
             try:
-                sell_order_id = position.get('sell_order_id')
-                if sell_order_id:
-                    order_status = self.broker.get_order_status(sell_order_id)
+                # Ask strategy if we should exit
+                should_exit, reason = self.strategy.check_exit_conditions(
+                    position, current_price, {}
+                )
+                
+                if should_exit:
+                    # Place market sell order
+                    order_id = self.broker.place_stock_order(
+                        symbol=symbol,
+                        quantity=position['quantity'],
+                        side='SELL',
+                        order_type='MARKET'
+                    )
+                    
+                    if order_id:
+                        # Wait for fill
+                        time.sleep(2)
+                        
+                        # Get fill price
+                        order_status = self.broker.get_order_status(order_id)
+                        if order_status and order_status['status'] == 'filled':
+                            fill_price = order_status['avg_fill_price']
+                            pnl = (fill_price - position['entry_price']) * position['quantity']
+                            
+                            logger.info(f"Position closed: {symbol} at ${fill_price:.2f}, PnL: ${pnl:.2f}, Reason: {reason}")
+                            
+                            # Notify strategy
+                            self.strategy.on_position_closed(position, pnl, reason)
+                            
+                            # Log to database
+                            self.database.log_trade(
+                                symbol=symbol,
+                                action='SELL',
+                                quantity=position['quantity'],
+                                price=fill_price,
+                                order_type='MARKET',
+                                reason=reason
+                            )
+                            
+                            # Remove from positions
+                            del self.positions[symbol]
+                
+                # During sell window, place limit order if not already placed
+                elif not position.get('sell_order_id'):
+                    now = datetime.now().time()
+                    sell_window_start = self.config.get('sell_window', {}).get('start', datetime_time(10, 0))
+                    sell_window_end = self.config.get('sell_window', {}).get('end', datetime_time(11, 0))
+                    
+                    if sell_window_start <= now <= sell_window_end:
+                        # Place limit sell order for profit target
+                        sell_price = position['entry_price'] + self.config.get('profit_target', 0.01)
+                        
+                        sell_order_id = self.broker.place_stock_order(
+                            symbol=symbol,
+                            quantity=position['quantity'],
+                            side='SELL',
+                            order_type='LIMIT',
+                            limit_price=sell_price,
+                            time_in_force='DAY'  # Only valid for today
+                        )
+                        
+                        if sell_order_id:
+                            position['sell_order_id'] = sell_order_id
+                            logger.info(f"Placed limit sell order at ${sell_price:.2f} during sell window")
+                
+                # Check if limit order was filled
+                elif position.get('sell_order_id'):
+                    order_status = self.broker.get_order_status(position['sell_order_id'])
                     if order_status and order_status['status'] == 'filled':
-                        # Position closed
                         fill_price = order_status['avg_fill_price']
                         pnl = (fill_price - position['entry_price']) * position['quantity']
                         
-                        logger.info(f"Position closed: {symbol} at ${fill_price:.2f}, PnL: ${pnl:.2f}")
+                        logger.info(f"Limit order filled: {symbol} at ${fill_price:.2f}, PnL: ${pnl:.2f}")
                         
                         # Notify strategy
-                        self.strategy.on_position_closed(position, pnl, 'target')
+                        self.strategy.on_position_closed(position, pnl, 'profit_target')
                         
                         # Log to database
                         self.database.log_trade(

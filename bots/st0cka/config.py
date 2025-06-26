@@ -9,11 +9,11 @@ ST0CKA_CONFIG = {
     'strategy_name': 'ST0CKA - SPY $0.01 Scalper',
     'active': True,  # Enable the strategy
     
-    # Trading window - focus on market open
+    # Trading window - full morning session for buy/sell windows
     'trading_window': {
         'start': time(9, 30),  # Market open
-        'end': time(9, 31),    # Only trade in first minute
-        'focus': 'SPY market open scalping'
+        'end': time(11, 0),    # End of sell window
+        'focus': 'SPY buy 9:30-10:00, sell 10:00-11:00'
     },
     
     # Position sizing - minimal risk
@@ -28,8 +28,15 @@ ST0CKA_CONFIG = {
     # Strategy specific
     'symbol': 'SPY',
     'profit_target': 0.01,  # $0.01 profit target
-    'stop_loss': 1.00,      # $1.00 stop loss for safety
-    'order_type': 'GTC',    # Good Till Canceled
+    'stop_loss': 5.00,      # $5.00 stop loss for catastrophic protection
+    'buy_window': {
+        'start': time(9, 30),
+        'end': time(10, 0)
+    },
+    'sell_window': {
+        'start': time(10, 0),
+        'end': time(11, 0)
+    },
     
     # Alpaca settings
     'alpaca': {

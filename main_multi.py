@@ -49,8 +49,8 @@ class BotLauncher:
                 api_key_env = 'STOCKG_KEY'
                 secret_key_env = 'ST0CKG_SECRET'
             elif self.bot_id == 'st0cka':
-                api_key_env = 'STOCKA_KEY'
-                secret_key_env = 'ST0CKA_SECRET'
+                api_key_env = 'ST0CKAKEY'
+                secret_key_env = 'ST0CKASECRET'
             else:
                 api_key_env = f'{self.bot_id.upper()}_KEY'
                 secret_key_env = f'{self.bot_id.upper()}_SECRET'
@@ -117,10 +117,10 @@ class BotLauncher:
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
                 )
             elif self.bot_id == 'st0cka':
-                # ST0CKA uses simple stock engine
-                from src.simple_stock_engine import SimpleStockEngine
+                # ST0CKA uses super simple engine
+                from src.st0cka_simple_engine import ST0CKASimpleEngine
                 
-                self.engine = SimpleStockEngine(
+                self.engine = ST0CKASimpleEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
@@ -176,6 +176,8 @@ class BotLauncher:
             now_utc = datetime.now(pytz.UTC)
             
             logger.info(f"Current time: {now_et.strftime('%I:%M %p')} ET / {now_utc.strftime('%I:%M %p')} UTC")
+            logger.info(f"Weekday: {now_et.weekday()} (0=Monday, 6=Sunday)")
+            logger.info(f"Hour: {now_et.hour}")
             
             if now_et.weekday() >= 5:
                 logger.info("Today is weekend - market is closed. Exiting.")
@@ -191,7 +193,12 @@ class BotLauncher:
             
             last_status_log = datetime.now()
             
+            logger.info(f"About to start main trading loop for {self.bot_id}")
+            logger.info(f"is_running = {self.is_running}")
+            logger.info(f"engine = {self.engine}")
+            
             # Main trading loop
+            logger.info(f"Starting main trading loop for {self.bot_id}")
             while self.is_running:
                 try:
                     # Only run during market hours (Eastern Time)
@@ -207,11 +214,8 @@ class BotLauncher:
                                 logger.info(f"Waiting for market hours... (current time: {now_et.strftime('%I:%M %p')} ET)")
                             last_status_log = datetime.now()
                     
-                    # Sleep interval based on trading window
-                    if self.engine and hasattr(self.engine, 'is_in_active_window') and self.engine.is_in_active_window():
-                        time.sleep(1)  # 1 second during active trading
-                    else:
-                        time.sleep(5)  # 5 seconds outside window
+                    # Sleep interval - 1 second for responsive trading
+                    time.sleep(1)
                         
                 except KeyboardInterrupt:
                     raise

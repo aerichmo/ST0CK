@@ -32,18 +32,16 @@ jobs:
         echo "Git commit:"
         git log --oneline -1
         echo "Checking environment variables..."
-        echo "STOCKA_KEY is: ${STOCKA_KEY:+set}"
-        echo "APCA_API_KEY_ID is: ${APCA_API_KEY_ID:+set}"
+        echo "ST0CKAKEY is: ${ST0CKAKEY:+set}"
+        echo "ST0CKASECRET is: ${ST0CKASECRET:+set}"
       env:
-        STOCKA_KEY: ${{ secrets.STOCKAKEY }}
-        APCA_API_KEY_ID: ${{ secrets.STOCKAKEY }}
+        ST0CKAKEY: ${{ secrets.STOCKAKEY }}
+        ST0CKASECRET: ${{ secrets.ST0CKASECRET }}
     
     - name: Run ST0CKA Trading Bot
       env:
-        STOCKA_KEY: ${{ secrets.STOCKAKEY }}
-        ST0CKA_SECRET: ${{ secrets.ST0CKASECRET }}
-        APCA_API_KEY_ID: ${{ secrets.STOCKAKEY }}  # For UnifiedMarketData
-        APCA_API_SECRET_KEY: ${{ secrets.ST0CKASECRET }}  # For UnifiedMarketData
+        ST0CKAKEY: ${{ secrets.STOCKAKEY }}
+        ST0CKASECRET: ${{ secrets.ST0CKASECRET }}
         ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
