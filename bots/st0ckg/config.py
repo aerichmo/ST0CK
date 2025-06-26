@@ -12,6 +12,7 @@ ST0CKG_CONFIG = {
     'trading_window': {
         'start': time(9, 35),   # After first 5-min bar
         'end': time(15, 50),    # Before market close
+        'entry_cutoff': time(11, 0),  # No new positions after 11:00 AM
         'focus': 'Battle line break-and-retest setups'
     },
     

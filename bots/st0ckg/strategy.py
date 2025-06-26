@@ -99,6 +99,11 @@ class ST0CKGStrategy(BaseStrategy):
         if not self.bias or self.position_open:
             return None
             
+        # Check time restriction - no new buys after 11:00 AM ET
+        if current_time.hour >= 11:
+            logger.info(f"[{self.bot_id}] No new positions after 11:00 AM ET")
+            return None
+            
         # Check daily limits
         if self.wins >= 2:
             logger.info(f"[{self.bot_id}] Daily win limit reached (2 wins)")

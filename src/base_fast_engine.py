@@ -74,7 +74,8 @@ class FastTradingEngine:
                 logger.info(f"[{self.bot_id}] First trading cycle at {current_time.strftime('%H:%M:%S')}")
             
             if (datetime.now() - self.last_log_time).seconds >= 30:
-                logger.info(f"[{self.bot_id}] Trading cycle at {current_time.strftime('%H:%M:%S')}")
+                status = "Ready" if hasattr(self, 'strategy') else "No strategy"
+                logger.info(f"[{self.bot_id}] Trading cycle at {current_time.strftime('%H:%M:%S')} - Status: {status}")
                 self.last_log_time = datetime.now()
             
             # Calculate opening range once
