@@ -42,6 +42,23 @@ ST0CKG_CONFIG = {
         'max_spread': 0.10,    # Max bid-ask spread
     },
     
+    # Trend filter configuration
+    'trend_filter': {
+        'ema_fast': 8,         # Fast EMA period
+        'ema_slow': 21,        # Slow EMA period
+    },
+    
+    # Session configuration
+    'session': {
+        'timezone': 'America/New_York',
+    },
+    
+    # Entry configuration
+    'entry': {
+        'atr_multiplier': 1.5,     # ATR multiplier for volatility filter
+        'volume_multiplier': 1.2,  # Volume multiplier for activity filter
+    },
+    
     # Battle line thresholds
     'bias_threshold': 0.10,    # $0.10 beyond PDH/PDL for bias
     'retest_zone': 0.50,       # Look for setups within $0.50 of levels
