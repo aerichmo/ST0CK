@@ -63,7 +63,21 @@ ST0CKG_CONFIG = {
     'bias_threshold': 0.10,    # $0.10 beyond PDH/PDL for bias
     'retest_zone': 0.50,       # Look for setups within $0.50 of levels
     
-    # Risk management
+    # Risk management configuration
+    'risk_management': {
+        'position_risk_pct': 1.0,         # 1% risk per position
+        'daily_loss_limit_pct': 2.0,      # 2% daily loss limit
+        'consecutive_loss_limit': 2,       # Stop after 2 consecutive losses
+        'max_positions': 1,                # Max 1 position at a time
+        'account_size_tiers': {            # Position sizing tiers
+            0: 1,        # Under $25k: 1 contract
+            25000: 2,    # $25k+: 2 contracts
+            50000: 3,    # $50k+: 3 contracts
+            100000: 5,   # $100k+: 5 contracts
+        }
+    },
+    
+    # R-based exit targets
     'breakeven_r': 1.0,        # Move stop to BE at 1R
     'scale_out_r': 1.5,        # Scale half at 1.5R
     'final_target_r': 3.0,     # Full exit at 3R
