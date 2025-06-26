@@ -1,5 +1,5 @@
 """
-AAGRAY Trading Dashboard Server
+ST0CKG Trading Dashboard Server
 Serves performance tracking and forecasts
 """
 import os
@@ -276,14 +276,14 @@ def get_trades():
 def forecast():
     """Serve the forecast document"""
     try:
-        with open('AAGRAY_MONTHLY_FORECAST.md', 'r') as f:
+        with open('ST0CKG_MONTHLY_FORECAST.md', 'r') as f:
             content = f.read()
         # Convert markdown to simple HTML
         html = f"""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>AAGRAY Monthly Forecast</title>
+            <title>ST0CKG Monthly Forecast</title>
             <style>
                 body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                         margin: 40px; line-height: 1.6; }}

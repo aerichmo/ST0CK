@@ -1,5 +1,5 @@
 """
-Performance configuration for AAGRAY trading system
+Performance configuration for ST0CKG trading system
 Optimized for speed and efficiency
 """
 import logging
@@ -23,7 +23,7 @@ LOGGING_CONFIG = {
         },
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': f'logs/aagray_{os.getpid()}.log',
+            'filename': f'logs/st0ckg_{os.getpid()}.log',
             'maxBytes': 10485760,  # 10MB
             'backupCount': 3,
             'formatter': 'compact',
@@ -33,12 +33,12 @@ LOGGING_CONFIG = {
     'loggers': {
         # Critical path - minimize logging
         'src.unified_market_data': {'level': 'WARNING'},
-        'src.aagray_signals': {'level': 'WARNING'},
+        'src.st0ckg_signals': {'level': 'WARNING'},
         'src.market_microstructure': {'level': 'WARNING'},
-        'src.aagray_options_selector': {'level': 'WARNING'},
+        'src.st0ckg_options_selector': {'level': 'WARNING'},
         
         # Important operations - keep INFO
-        'src.aagray_engine': {'level': 'INFO'},
+        'src.st0ckg_engine': {'level': 'INFO'},
         'bots.st0ckg.strategy': {'level': 'INFO'},
         
         # Third-party - suppress noise
@@ -73,7 +73,7 @@ PERFORMANCE_SETTINGS = {
     'memory_warning_threshold': 500 * 1024 * 1024,  # 500MB
 }
 
-def configure_logging(bot_id: str = 'aagray'):
+def configure_logging(bot_id: str = 'st0ckg'):
     """Apply optimized logging configuration"""
     import logging.config
     import copy

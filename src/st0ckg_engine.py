@@ -1,5 +1,5 @@
 """
-AAGRAY Simplified Trading Engine
+ST0CKG Engine
 Lean and focused on execution
 """
 import logging
@@ -13,8 +13,8 @@ from .multi_bot_database import MultiBotDatabaseManager
 logger = logging.getLogger(__name__)
 
 
-class AAGRAYSimplifiedEngine(FastTradingEngine):
-    """Simplified AAGRAY engine - just the essentials"""
+class ST0CKGEngine(FastTradingEngine):
+    """ST0CKG Engine - Battle Lines 0-DTE trading"""
     
     def __init__(self, config: dict, capital: float, db_connection_string: str):
         # Initialize with bot_id from config
@@ -29,9 +29,9 @@ class AAGRAYSimplifiedEngine(FastTradingEngine):
         # Register bot
         self.multi_db.register_bot(
             bot_id=self.bot_id,
-            bot_name='AAGRAY Simplified',
-            strategy_type='AAGRAYSimplifiedStrategy',
-            alpaca_account=os.getenv('AAGRAY_ALPACA_ACCOUNT', 'primary'),
+            bot_name='ST0CKG Engine',
+            strategy_type='ST0CKGStrategy',
+            alpaca_account=os.getenv('ST0CKG_ALPACA_ACCOUNT', 'primary'),
             config=config
         )
         
@@ -46,7 +46,7 @@ class AAGRAYSimplifiedEngine(FastTradingEngine):
         self.strategy = ST0CKGStrategy(self.bot_id, config)
         self.strategy.initialize(self.market_data)
         
-        logger.info(f"[{self.bot_id}] AAGRAY Simplified Engine initialized")
+        logger.info(f"[{self.bot_id}] ST0CKG Engine initialized")
     
     def is_in_active_window(self) -> bool:
         """Check if we're in the active trading window"""
