@@ -46,8 +46,8 @@ class BotLauncher:
             
             # Replace API keys with environment variables
             if self.bot_id == 'st0ckg':
-                api_key_env = 'STOCKG_KEY'
-                secret_key_env = 'ST0CKG_SECRET'
+                api_key_env = 'ST0CKGKEY'
+                secret_key_env = 'ST0CKGSECRET'
             elif self.bot_id == 'st0cka':
                 api_key_env = 'ST0CKAKEY'
                 secret_key_env = 'ST0CKASECRET'

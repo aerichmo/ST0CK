@@ -65,8 +65,8 @@ class UnifiedMarketData:
     
     def __init__(self, api_key: str = None, api_secret: str = None, skip_options: bool = False):
         # Get credentials
-        self.api_key = api_key or os.environ.get('APCA_API_KEY_ID') or os.environ.get('ST0CKAKEY')
-        self.api_secret = api_secret or os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ST0CKASECRET')
+        self.api_key = api_key or os.environ.get('APCA_API_KEY_ID') or os.environ.get('ST0CKAKEY') or os.environ.get('ST0CKGKEY')
+        self.api_secret = api_secret or os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ST0CKASECRET') or os.environ.get('ST0CKGSECRET')
         
         # Debug logging
         logger.debug(f"API Key from env: {'Set' if self.api_key else 'Not set'}")
