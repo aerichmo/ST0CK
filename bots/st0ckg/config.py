@@ -6,6 +6,7 @@ from datetime import time
 ST0CKG_CONFIG = {
     'bot_id': 'st0ckg',
     'strategy_name': 'ST0CKG - Battle Lines 0-DTE',
+    'active': True,  # Enable the strategy
     
     # Trading window - after first 5-min bar
     'trading_window': {
@@ -26,6 +27,14 @@ ST0CKG_CONFIG = {
     'default_stop_distance': 0.10,  # $0.10 SPY stop
     
     # Option selection
+    'options': {
+        'target_delta': 0.30,      # ATM options
+        'delta_tolerance': 0.05,   # Accept deltas within +/- 0.05 of target
+        'max_dte': 0,             # 0-DTE only
+        'min_volume': 100,        # Minimum option volume
+        'max_spread': 0.10,       # Max bid-ask spread
+        'max_spread_pct': 2.0,    # Max spread as % of mid price
+    },
     'option_selection': {
         'target_delta': 0.30,   # ATM options
         'max_dte': 0,          # 0-DTE only
