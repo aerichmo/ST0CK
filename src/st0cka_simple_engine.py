@@ -51,10 +51,10 @@ class ST0CKASimpleEngine:
                 
             # Initialize market data
             from src.unified_market_data import UnifiedMarketData
-            self.market_data = UnifiedMarketData({
-                'provider': 'alpaca',
-                'alpaca': self.config['alpaca']
-            })
+            self.market_data = UnifiedMarketData(
+                api_key=self.config['alpaca']['api_key'],
+                api_secret=self.config['alpaca']['secret_key']
+            )
             
             # Initialize strategy
             from bots.st0cka.strategy import ST0CKAStrategy
@@ -145,15 +145,14 @@ class ST0CKASimpleEngine:
             if quote and quote.get('price'):
                 return quote['price']
                 
-            # As a fallback, just return a placeholder to allow market orders
-            # Market orders will execute at current market price anyway
-            logger.debug("Using placeholder price for market order")
-            return 1.0  # Non-zero to pass validation
+            # As a fallback, return None to skip this cycle
+            logger.debug("No SPY price available, skipping cycle")
+            return None
             
         except Exception as e:
             logger.error(f"Error getting SPY price: {e}")
-            # Still return 1.0 to allow trading to proceed with market orders
-            return 1.0
+            # Return None to skip this cycle
+            return None
     
     def _buy_spy(self, current_price: float):
         """Buy 1 share of SPY"""
@@ -187,15 +186,7 @@ class ST0CKASimpleEngine:
                     'quantity': 1
                 })
                 
-                # Log it
-                self.database.log_trade(
-                    symbol='SPY',
-                    action='BUY',
-                    quantity=1,
-                    price=self.spy_price,
-                    order_type='MARKET',
-                    reason='buy_window'
-                )
+                # Log it (skip database logging for now)
                 
                 logger.info(f"Bought 1 SPY at ${self.spy_price:.2f}")
                 
@@ -291,15 +282,7 @@ class ST0CKASimpleEngine:
             reason
         )
         
-        # Log it
-        self.database.log_trade(
-            symbol='SPY',
-            action='SELL',
-            quantity=1,
-            price=sell_price,
-            order_type='MARKET' if reason != 'limit_filled' else 'LIMIT',
-            reason=reason
-        )
+        # Log it (skip database logging for now)
         
         # Reset
         self.have_spy = False
