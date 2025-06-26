@@ -17,7 +17,7 @@ ST0CKG_CONFIG = {
     
     # Capital and risk
     'capital': 5000,
-    'risk_per_trade': 0.01,    # 1% risk per trade
+    'risk_per_trade': 0.05,    # 5% risk per trade
     'max_daily_loss': 0.02,    # 2R daily stop
     'max_wins_per_day': 2,     # Stop after 2 wins
     'max_losses_per_day': 2,   # Stop after 2 losses
@@ -65,8 +65,8 @@ ST0CKG_CONFIG = {
     
     # Risk management configuration
     'risk_management': {
-        'position_risk_pct': 1.0,         # 1% risk per position
-        'daily_loss_limit_pct': 2.0,      # 2% daily loss limit
+        'position_risk_pct': 5.0,         # 5% risk per position
+        'daily_loss_limit_pct': 10.0,      # 10% daily loss limit (2 x 5% losses)
         'consecutive_loss_limit': 2,       # Stop after 2 consecutive losses
         'max_positions': 1,                # Max 1 position at a time
         'account_size_tiers': {            # Position sizing tiers
