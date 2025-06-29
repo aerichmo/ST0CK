@@ -57,7 +57,7 @@ def configure_logging(log_level=logging.INFO, log_to_file=True):
     console_handler.setLevel(log_level)
     console_formatter = logging.Formatter(
         '%(asctime)s - [%(name)s] - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S'
+        datefmt='%H:%M:%S %Z'
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
@@ -69,7 +69,8 @@ def configure_logging(log_level=logging.INFO, log_to_file=True):
         )
         file_handler.setLevel(logging.DEBUG)  # Log everything to file
         file_formatter = logging.Formatter(
-            '%(asctime)s - [%(name)s] - %(levelname)s - %(message)s'
+            '%(asctime)s - [%(name)s] - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S %Z'
         )
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)

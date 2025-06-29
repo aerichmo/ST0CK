@@ -12,10 +12,10 @@ if [ ! -f .env ]; then
     echo "Creating .env file template..."
     cat > .env << EOF
 # Alpaca API Configuration
-STOCKG_KEY=your-stockg-key
-ST0CKG_SECRET=your-stockg-secret
-STOCKA_KEY=your-stocka-key
-ST0CKA_SECRET=your-stocka-secret
+ST0CKGKEY=your-stockg-key
+ST0CKGSECRET=your-stockg-secret
+ST0CKAKEY=your-stocka-key
+ST0CKASECRET=your-stocka-secret
 ALPACA_BASE_URL=https://api.alpaca.markets
 
 # Trading Capital

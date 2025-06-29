@@ -7,6 +7,7 @@ from datetime import datetime
 from contextlib import contextmanager
 from functools import wraps
 import time
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,26 @@ def validate_market_hours(current_time: datetime, timezone) -> bool:
     market_close = market_time.replace(hour=16, minute=0, second=0, microsecond=0)
     
     return market_open <= market_time <= market_close
+
+
+def is_market_open() -> bool:
+    """
+    Simple check if market is currently open
+    
+    Returns:
+        True if market is open, False otherwise
+    """
+    now = datetime.now(pytz.timezone('America/New_York'))
+    
+    # Weekend check
+    if now.weekday() >= 5:  # Saturday = 5, Sunday = 6
+        return False
+    
+    # Time check
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    return market_open <= now <= market_close
 
 
 def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:

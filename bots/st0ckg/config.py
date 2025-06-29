@@ -3,6 +3,47 @@ Configuration for ST0CKG - Battle Lines Strategy
 """
 from datetime import time
 
+def validate_config(config):
+    """Validate ST0CKG configuration"""
+    # Risk parameters
+    assert 0 < config['risk_per_trade'] <= 1.0, f"risk_per_trade must be between 0 and 1, got {config['risk_per_trade']}"
+    assert 0 < config['max_daily_loss'] <= 1.0, f"max_daily_loss must be between 0 and 1, got {config['max_daily_loss']}"
+    assert config['max_wins_per_day'] > 0, f"max_wins_per_day must be positive, got {config['max_wins_per_day']}"
+    assert config['max_losses_per_day'] > 0, f"max_losses_per_day must be positive, got {config['max_losses_per_day']}"
+    
+    # Position sizing
+    assert config['max_position_size'] > 0, f"max_position_size must be positive, got {config['max_position_size']}"
+    assert config['default_stop_distance'] > 0, f"default_stop_distance must be positive, got {config['default_stop_distance']}"
+    
+    # Option parameters
+    opts = config['options']
+    assert 0 < opts['target_delta'] <= 1.0, f"target_delta must be between 0 and 1, got {opts['target_delta']}"
+    assert opts['delta_tolerance'] > 0, f"delta_tolerance must be positive, got {opts['delta_tolerance']}"
+    assert opts['max_dte'] >= 0, f"max_dte must be non-negative, got {opts['max_dte']}"
+    assert opts['min_volume'] >= 0, f"min_volume must be non-negative, got {opts['min_volume']}"
+    assert opts['max_spread'] > 0, f"max_spread must be positive, got {opts['max_spread']}"
+    assert opts['max_spread_pct'] > 0, f"max_spread_pct must be positive, got {opts['max_spread_pct']}"
+    
+    # Risk management
+    rm = config['risk_management']
+    assert 0 < rm['position_risk_pct'] <= 100, f"position_risk_pct must be between 0 and 100, got {rm['position_risk_pct']}"
+    assert 0 < rm['daily_loss_limit_pct'] <= 100, f"daily_loss_limit_pct must be between 0 and 100, got {rm['daily_loss_limit_pct']}"
+    assert rm['consecutive_loss_limit'] > 0, f"consecutive_loss_limit must be positive, got {rm['consecutive_loss_limit']}"
+    assert rm['max_positions'] > 0, f"max_positions must be positive, got {rm['max_positions']}"
+    
+    # Time windows
+    assert config['trading_window']['start'] < config['trading_window']['end'], "trading window start must be before end"
+    
+    # Capital
+    assert config['capital'] > 0, f"capital must be positive, got {config['capital']}"
+    
+    # R-based targets
+    assert config['breakeven_r'] > 0, f"breakeven_r must be positive, got {config['breakeven_r']}"
+    assert config['scale_out_r'] > config['breakeven_r'], f"scale_out_r must be greater than breakeven_r"
+    assert config['final_target_r'] > config['scale_out_r'], f"final_target_r must be greater than scale_out_r"
+    
+    return True
+
 ST0CKG_CONFIG = {
     'bot_id': 'st0ckg',
     'strategy_name': 'ST0CKG - Battle Lines 0-DTE',
@@ -90,3 +131,6 @@ ST0CKG_CONFIG = {
         'secret_key': 'APCA_API_SECRET_KEY'
     }
 }
+
+# Validate config on import
+validate_config(ST0CKG_CONFIG)

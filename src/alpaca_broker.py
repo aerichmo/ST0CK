@@ -167,7 +167,7 @@ class AlpacaBroker(BrokerInterface):
             return order.id
             
         except Exception as e:
-            logger.error(f"Failed to place option order: {e}")
+            logger.error(f"Failed to place option order: {symbol} {quantity} {order_type} - Error: {e}")
             return None
     
     def place_oco_order(self, contract: Dict, quantity: int, 
@@ -220,7 +220,7 @@ class AlpacaBroker(BrokerInterface):
             return oco_id
             
         except Exception as e:
-            logger.error(f"Failed to place OCO order: {e}")
+            logger.error(f"Failed to place OCO order: {symbol} stop@{stop_price} targets@{target_prices} - Error: {e}")
             return None
     
     def cancel_order(self, order_id: str) -> bool:
@@ -427,7 +427,7 @@ class AlpacaBroker(BrokerInterface):
             return order.id
             
         except Exception as e:
-            logger.error(f"Failed to place stock order: {e}")
+            logger.error(f"Failed to place stock order: {symbol} {quantity} {side} {order_type} - Error: {e}")
             return None
     
     def close_position(self, symbol: str, quantity: Optional[int] = None) -> Optional[str]:

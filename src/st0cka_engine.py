@@ -1,7 +1,6 @@
 """
-Unified Simple Stock Trading Engine
-Consolidates ST0CKASimpleEngine and SimpleStockEngine functionality
-Configuration-driven to support different trading modes
+ST0CKA Engine - Simple SPY scalping strategy
+Buy 1 share of SPY at market open and sell with $0.01 profit GTC
 """
 import logging
 import sys
@@ -16,9 +15,9 @@ from bots.st0cka.strategy import ST0CKAStrategy
 logger = logging.getLogger(__name__)
 
 
-class UnifiedSimpleEngine(BaseEngine):
+class ST0CKAEngine(BaseEngine):
     """
-    Unified simple engine for stock trading
+    ST0CKA Engine - Simple SPY scalping with $0.01 profit target
     Supports both simple single-position and advanced multi-position modes
     """
     
@@ -70,12 +69,16 @@ class UnifiedSimpleEngine(BaseEngine):
         if self.use_market_data and not hasattr(self, 'market_data'):
             self.market_data = UnifiedMarketData()
         
-        logger.info("Initialized UnifiedSimpleEngine in %s mode for %s", 
+        logger.info("Initialized ST0CKAEngine in %s mode for %s", 
                    self.mode, self.symbol)
     
     def run_trading_cycle(self):
         """Main trading cycle"""
         try:
+            # Check if market is open first
+            if not self.is_market_open():
+                return
+            
             now_et = datetime.now(pytz.timezone('America/New_York'))
             current_time = now_et.time()
             
