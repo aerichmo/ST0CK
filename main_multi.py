@@ -117,10 +117,17 @@ class BotLauncher:
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')
                 )
             elif self.bot_id == 'st0cka':
-                # ST0CKA uses super simple engine
-                from src.st0cka_simple_engine import ST0CKASimpleEngine
+                # ST0CKA uses unified simple engine
+                from src.unified_simple_engine import UnifiedSimpleEngine
                 
-                self.engine = ST0CKASimpleEngine(
+                # Add ST0CKA-specific configuration
+                self.config['engine_mode'] = 'simple'
+                self.config['symbol'] = 'SPY'
+                self.config['use_market_data'] = True
+                self.config['auto_shutdown'] = True
+                self.config['profit_target'] = 0.01
+                
+                self.engine = UnifiedSimpleEngine(
                     config=self.config,
                     capital=self.config['capital'],
                     db_connection_string=os.getenv('DATABASE_URL', 'sqlite:///trading_multi.db')

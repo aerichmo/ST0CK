@@ -7,9 +7,14 @@ from typing import Dict, List, Optional
 from collections import deque
 import threading
 import time
+import socket
+from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
+
+# IPv4 cache for DNS lookups
+_ipv4_cache = {}
 
 class Trade(Base):
     __tablename__ = 'trades'
@@ -87,15 +92,15 @@ class BatchedDatabaseManager:
             # Force IPv4 for Supabase connections
             if 'supabase.co' in connection_string:
                 # Parse and rebuild connection string to force IPv4
-                import socket
-                from urllib.parse import urlparse, urlunparse
-                
                 parsed = urlparse(connection_string)
                 hostname = parsed.hostname
                 
-                # Resolve to IPv4 address
+                # Resolve to IPv4 address with caching
                 try:
-                    ipv4_addr = socket.gethostbyname(hostname)
+                    if hostname not in _ipv4_cache:
+                        _ipv4_cache[hostname] = socket.gethostbyname(hostname)
+                    ipv4_addr = _ipv4_cache[hostname]
+                    
                     # Replace hostname with IPv4 address
                     netloc = parsed.netloc.replace(hostname, ipv4_addr)
                     connection_string = urlunparse((
@@ -191,9 +196,8 @@ class BatchedDatabaseManager:
                             for key, value in trade_data['data'].items():
                                 setattr(trade, key, value)
             else:
-                # Bulk insert for other queues
-                items = [model_class(**data) for data in queue]
-                session.bulk_save_objects(items)
+                # Bulk insert for other queues - more efficient with bulk_insert_mappings
+                session.bulk_insert_mappings(model_class, list(queue))
                 queue.clear()
             
             session.commit()

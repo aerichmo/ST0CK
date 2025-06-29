@@ -31,8 +31,6 @@ MODULE_LOG_LEVELS = {
     
     # Debug modules (only errors)
     'src.alpaca_broker': logging.ERROR,
-    'src.alpaca_market_data': logging.ERROR,
-    'src.alpaca_options_data': logging.ERROR,
 }
 
 def configure_logging(log_level=logging.INFO, log_to_file=True):
@@ -67,7 +65,7 @@ def configure_logging(log_level=logging.INFO, log_to_file=True):
     # File handler (if enabled)
     if log_to_file:
         file_handler = logging.FileHandler(
-            f'logs/apex_{datetime.now().strftime("%Y%m%d")}.log'
+            f'logs/st0ckg_{datetime.now().strftime("%Y%m%d")}.log'
         )
         file_handler.setLevel(logging.DEBUG)  # Log everything to file
         file_formatter = logging.Formatter(

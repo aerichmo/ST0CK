@@ -8,47 +8,34 @@ from datetime import datetime, time, timedelta
 from typing import Dict, Optional
 import pandas as pd
 
+from .base_engine import BaseEngine
 from .unified_market_data import UnifiedMarketData
 from .options_selector import FastOptionsSelector
-from .alpaca_broker import AlpacaBroker
 from .trend_filter import TrendFilter
-from .risk_manager import RiskManager
 from .database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
 
-class FastTradingEngine:
+class FastTradingEngine(BaseEngine):
     """Lean trading engine with minimal overhead"""
     
     def __init__(self, config: dict, capital: float, db_connection_string: str):
-        self.config = config
-        self.capital = capital
-        
-        # Initialize unified market data
-        self.market_data = UnifiedMarketData()
+        # Call parent constructor to initialize common components
+        super().__init__(config, capital, db_connection_string)
         
         # Pre-fetch options for the session
         logger.info("Pre-fetching SPY options for trading session...")
         self.market_data.prefetch_session_data('SPY')
         
-        # Initialize components
-        self.broker = AlpacaBroker(
-            api_key=config["alpaca"]["api_key"],
-            secret_key=config["alpaca"]["secret_key"],
-            paper=config["alpaca"]["paper"]
-        )
-        self.broker.connect()
-        
+        # Initialize engine-specific components
         self.options_selector = FastOptionsSelector(config, self.market_data)
         self.trend_filter = TrendFilter(config)
-        self.risk_manager = RiskManager(config, capital)
         
-        # Database is mandatory
+        # Use the base class database manager instead of creating new one
         self.db = DatabaseManager(db_connection_string)
         
-        # Trading state
-        self.positions = {}
+        # Engine-specific state
         self.last_signal_time = None
         self.opening_range_calculated = False
         
@@ -83,14 +70,12 @@ class FastTradingEngine:
                 self._calculate_opening_range()
                 self.opening_range_calculated = True
             
-            # Check if in trading window
-            if not (self.window_start <= current_time <= self.window_end):
+            # Check if in trading window using base class method
+            if not self.is_within_trading_window():
                 return
             
-            # Check risk limits
-            allowed, reason = self.risk_manager.check_trade_allowed()
-            if not allowed:
-                logger.debug(f"Trading not allowed: {reason}")
+            # Check risk limits using base class method
+            if not self.check_risk_limits():
                 return
             
             # Get current SPY data

@@ -37,10 +37,78 @@ def monthly():
     """Serve the monthly dashboard"""
     return send_from_directory('public', 'monthly.html')
 
+@app.route('/metrics')
+def metrics_dashboard():
+    """Serve the metrics dashboard"""
+    return send_from_directory('public', 'metrics.html')
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+
+@app.route('/api/metrics')
+def get_metrics():
+    """Get system performance metrics including cache statistics"""
+    try:
+        metrics = {
+            'timestamp': datetime.now().isoformat(),
+            'cache_stats': {},
+            'connection_pool_stats': {},
+            'database_stats': {}
+        }
+        
+        # Try to get cache statistics from UnifiedMarketData
+        try:
+            from src.unified_market_data import UnifiedMarketData
+            # This is a singleton pattern - get existing instance if available
+            market_data = UnifiedMarketData()
+            cache_stats = market_data.get_cache_stats()
+            metrics['cache_stats'] = cache_stats
+        except Exception as e:
+            app.logger.warning(f"Could not get cache stats: {e}")
+            metrics['cache_stats'] = {'error': str(e)}
+        
+        # Try to get connection pool statistics
+        try:
+            from src.connection_pool import AlpacaConnectionManager
+            # Get connection manager stats if available
+            if hasattr(market_data, 'connection_manager') and market_data.connection_manager:
+                pool_stats = market_data.connection_manager.get_statistics()
+                metrics['connection_pool_stats'] = pool_stats
+        except Exception as e:
+            app.logger.warning(f"Could not get connection pool stats: {e}")
+            metrics['connection_pool_stats'] = {'error': str(e)}
+        
+        # Database connection info
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM trades WHERE bot_id = 'st0ckg'")
+        total_trades = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) FROM trades 
+            WHERE bot_id = 'st0ckg' 
+            AND DATE(entry_time) = DATE('now')
+        """)
+        trades_today = cursor.fetchone()[0]
+        
+        metrics['database_stats'] = {
+            'total_trades': total_trades,
+            'trades_today': trades_today
+        }
+        
+        conn.close()
+        
+        return jsonify(metrics)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting metrics: {e}")
+        return jsonify({
+            'error': 'Failed to get metrics',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/performance')
 def get_performance():

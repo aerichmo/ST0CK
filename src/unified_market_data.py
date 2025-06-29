@@ -18,8 +18,10 @@ from alpaca.data.requests import (
     StockBarsRequest
 )
 from alpaca.data.timeframe import TimeFrame
+from .connection_pool import AlpacaConnectionManager
 import pandas as pd
 import os
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -69,22 +71,36 @@ class UnifiedMarketData:
         self.api_secret = api_secret or os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ST0CKASECRET') or os.environ.get('ST0CKGSECRET')
         
         # Debug logging
-        logger.debug(f"API Key from env: {'Set' if self.api_key else 'Not set'}")
-        logger.debug(f"API Secret from env: {'Set' if self.api_secret else 'Not set'}")
+        logger.debug("API Key from env: %s", 'Set' if self.api_key else 'Not set')
+        logger.debug("API Secret from env: %s", 'Set' if self.api_secret else 'Not set')
         
-        # Initialize clients only if credentials are available
+        # Initialize connection manager for pooling and rate limiting
+        self.connection_manager = None
+        
+        # Keep legacy clients for backward compatibility
         self.option_client = None
         self.stock_client = None
         
         if self.api_key and self.api_secret:
-            # Initialize clients
-            if not skip_options:
-                try:
-                    self.option_client = OptionHistoricalDataClient(self.api_key, self.api_secret)
-                except Exception as e:
-                    logger.warning(f"Could not initialize option client: {e}")
-            
-            self.stock_client = StockHistoricalDataClient(self.api_key, self.api_secret)
+            # Initialize connection manager
+            try:
+                self.connection_manager = AlpacaConnectionManager(
+                    self.api_key, 
+                    self.api_secret,
+                    base_url=os.environ.get('ALPACA_BASE_URL')
+                )
+                logger.info("Initialized connection pool manager")
+            except Exception as e:
+                logger.warning("Could not initialize connection manager: %s", e)
+                
+                # Fallback to direct clients
+                if not skip_options:
+                    try:
+                        self.option_client = OptionHistoricalDataClient(self.api_key, self.api_secret)
+                    except Exception as e:
+                        logger.warning("Could not initialize option client: %s", e)
+                
+                self.stock_client = StockHistoricalDataClient(self.api_key, self.api_secret)
         else:
             logger.warning("No Alpaca API credentials found. Market data will not be available.")
         
@@ -99,19 +115,29 @@ class UnifiedMarketData:
         self.current_session_options = {}
         self.opening_ranges = {}
         
+        # Cache statistics
+        self.cache_stats = {
+            'hits': 0,
+            'misses': 0,
+            'quote_hits': 0,
+            'quote_misses': 0,
+            'option_hits': 0,
+            'option_misses': 0
+        }
+        
         logger.info("Initialized UnifiedMarketData with aggressive caching")
     
     def prefetch_session_data(self, symbol: str = 'SPY'):
         """Pre-fetch all option data for today's trading session"""
         try:
-            logger.info(f"Pre-fetching {symbol} options for trading session...")
+            logger.info("Pre-fetching %s options for trading session...", symbol)
             
             # Get next 3 weekly expirations
             expirations = self._get_weekly_expirations(3)
             
             for expiry in expirations:
                 # Pre-fetch option chains for both calls and puts
-                logger.info(f"Pre-fetching options for {expiry.date()}")
+                logger.info("Pre-fetching options for %s", expiry.date())
                 
                 # Fetch CALL options
                 call_chain = self.get_option_chain_fast(symbol, expiry, 'CALL')
@@ -125,39 +151,170 @@ class UnifiedMarketData:
                     key = f"{symbol}_{expiry.date()}_P"
                     self.current_session_options[key] = put_chain
             
-            logger.info(f"Pre-fetched {len(self.current_session_options)} option chains")
+            logger.info("Pre-fetched %d option chains", len(self.current_session_options))
             
         except Exception as e:
-            logger.error(f"Failed to prefetch session data: {e}")
+            logger.error("Failed to prefetch session data: %s", e)
+    
+    def warm_quote_cache(self, symbols: list = None):
+        """Pre-warm quote cache for frequently accessed symbols"""
+        if symbols is None:
+            symbols = ['SPY', 'QQQ', 'IWM', 'DIA']  # Common ETFs
+        
+        logger.info("Warming quote cache for %d symbols", len(symbols))
+        for symbol in symbols:
+            try:
+                self.get_quote(symbol)
+            except Exception as e:
+                logger.warning("Failed to warm cache for %s: %s", symbol, e)
+    
+    def get_cache_stats(self) -> Dict:
+        """Get cache performance statistics"""
+        total_hits = self.cache_stats['quote_hits'] + self.cache_stats['option_hits']
+        total_misses = self.cache_stats['quote_misses'] + self.cache_stats['option_misses']
+        hit_rate = total_hits / (total_hits + total_misses) * 100 if (total_hits + total_misses) > 0 else 0
+        
+        return {
+            'total_hits': total_hits,
+            'total_misses': total_misses,
+            'hit_rate': hit_rate,
+            'quote_hit_rate': self.cache_stats['quote_hits'] / (self.cache_stats['quote_hits'] + self.cache_stats['quote_misses']) * 100 if (self.cache_stats['quote_hits'] + self.cache_stats['quote_misses']) > 0 else 0,
+            'option_hit_rate': self.cache_stats['option_hits'] / (self.cache_stats['option_hits'] + self.cache_stats['option_misses']) * 100 if (self.cache_stats['option_hits'] + self.cache_stats['option_misses']) > 0 else 0,
+            'cache_sizes': {
+                'quotes': len(self.quote_cache.cache),
+                'options': len(self.option_cache.cache),
+                'snapshots': len(self.snapshot_cache.cache),
+                'bars': len(self.bar_cache.cache)
+            }
+        }
     
     def get_spy_quote(self) -> Dict:
         """Get SPY quote with caching"""
         cache_key = "SPY_quote"
         cached = self.quote_cache.get(cache_key)
         if cached:
+            self.cache_stats['quote_hits'] += 1
             return cached
         
+        self.cache_stats['quote_misses'] += 1
+        
         try:
-            request = StockQuotesRequest(symbol_or_symbols="SPY", limit=1, feed='iex')
-            quotes = self.stock_client.get_stock_quotes(request)
-            
-            if "SPY" in quotes and quotes["SPY"]:
-                quote = quotes["SPY"][0]
-                result = {
-                    'symbol': 'SPY',
-                    'price': float(quote.ask_price),
-                    'bid': float(quote.bid_price),
-                    'ask': float(quote.ask_price),
-                    'bid_size': int(quote.bid_size),
-                    'ask_size': int(quote.ask_size),
-                    'timestamp': quote.timestamp
-                }
-                self.quote_cache.set(cache_key, result)
-                return result
+            # Use connection manager if available
+            if self.connection_manager:
+                quote = self.connection_manager.get_stock_quote("SPY")
+                if quote:
+                    result = {
+                        'symbol': 'SPY',
+                        'price': float(quote.ask_price),
+                        'bid': float(quote.bid_price),
+                        'ask': float(quote.ask_price),
+                        'bid_size': int(quote.bid_size),
+                        'ask_size': int(quote.ask_size),
+                        'timestamp': quote.timestamp
+                    }
+                    self.quote_cache.set(cache_key, result)
+                    return result
+            elif self.stock_client:
+                # Fallback to direct client
+                request = StockQuotesRequest(symbol_or_symbols="SPY", limit=1, feed='iex')
+                quotes = self.stock_client.get_stock_quotes(request)
+                
+                if "SPY" in quotes and quotes["SPY"]:
+                    quote = quotes["SPY"][0]
+                    result = {
+                        'symbol': 'SPY',
+                        'price': float(quote.ask_price),
+                        'bid': float(quote.bid_price),
+                        'ask': float(quote.ask_price),
+                        'bid_size': int(quote.bid_size),
+                        'ask_size': int(quote.ask_size),
+                        'timestamp': quote.timestamp
+                    }
+                    self.quote_cache.set(cache_key, result)
+                    return result
         except Exception as e:
-            logger.error(f"Failed to get SPY quote: {e}")
+            logger.error("Failed to get SPY quote: %s", e)
         
         return {'symbol': 'SPY', 'price': 0, 'bid': 0, 'ask': 0}
+    
+    async def get_multiple_quotes_async(self, symbols: List[str]) -> Dict[str, Dict]:
+        """
+        Get multiple stock quotes concurrently using async/await
+        Significantly faster than sequential fetching
+        """
+        if self.connection_manager:
+            # Use connection manager's async method
+            return await self.connection_manager.get_multiple_quotes_async(symbols)
+        else:
+            # Fallback to sequential fetching with asyncio
+            loop = asyncio.get_event_loop()
+            tasks = []
+            
+            for symbol in symbols:
+                # Create coroutine for each symbol
+                task = loop.run_in_executor(None, self.get_quote, symbol)
+                tasks.append(task)
+            
+            # Wait for all tasks to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Build result dictionary
+            quote_dict = {}
+            for symbol, result in zip(symbols, results):
+                if isinstance(result, Exception):
+                    logger.warning("Failed to get quote for %s: %s", symbol, result)
+                    quote_dict[symbol] = None
+                else:
+                    quote_dict[symbol] = result
+            
+            return quote_dict
+    
+    def get_quote(self, symbol: str) -> Dict:
+        """Get quote for any symbol with caching"""
+        cache_key = f"{symbol}_quote"
+        cached = self.quote_cache.get(cache_key)
+        if cached:
+            self.cache_stats['quote_hits'] += 1
+            return cached
+        
+        self.cache_stats['quote_misses'] += 1
+        
+        try:
+            if self.connection_manager:
+                quote = self.connection_manager.get_stock_quote(symbol)
+                if quote:
+                    result = {
+                        'symbol': symbol,
+                        'price': float(quote.ask_price),
+                        'bid': float(quote.bid_price),
+                        'ask': float(quote.ask_price),
+                        'bid_size': int(quote.bid_size),
+                        'ask_size': int(quote.ask_size),
+                        'timestamp': quote.timestamp
+                    }
+                    self.quote_cache.set(cache_key, result)
+                    return result
+            elif self.stock_client:
+                request = StockQuotesRequest(symbol_or_symbols=symbol, limit=1, feed='iex')
+                quotes = self.stock_client.get_stock_quotes(request)
+                
+                if symbol in quotes and quotes[symbol]:
+                    quote = quotes[symbol][0]
+                    result = {
+                        'symbol': symbol,
+                        'price': float(quote.ask_price),
+                        'bid': float(quote.bid_price),
+                        'ask': float(quote.ask_price),
+                        'bid_size': int(quote.bid_size),
+                        'ask_size': int(quote.ask_size),
+                        'timestamp': quote.timestamp
+                    }
+                    self.quote_cache.set(cache_key, result)
+                    return result
+        except Exception as e:
+            logger.error("Failed to get quote for %s: %s", symbol, e)
+        
+        return {'symbol': symbol, 'price': 0, 'bid': 0, 'ask': 0}
     
     def get_option_chain_fast(self, symbol: str, expiration: datetime, 
                              option_type: str = 'CALL') -> List[Dict]:
@@ -203,7 +360,7 @@ class UnifiedMarketData:
             return options
             
         except Exception as e:
-            logger.error(f"Failed to fetch option chain: {e}")
+            logger.error("Failed to fetch option chain: %s", e)
             return []
     
     def get_option_quotes_batch(self, symbols: List[str]) -> Dict[str, Dict]:
@@ -239,7 +396,7 @@ class UnifiedMarketData:
                     self.quote_cache.set(f"option_{symbol}", quote_dict)
                     
             except Exception as e:
-                logger.error(f"Failed to fetch option quotes batch: {e}")
+                logger.error("Failed to fetch option quotes batch: %s", e)
         
         return result
     
@@ -287,7 +444,7 @@ class UnifiedMarketData:
                         self.snapshot_cache.set(symbol, snapshot_dict)
                         
             except Exception as e:
-                logger.error(f"Failed to fetch option snapshots: {e}")
+                logger.error("Failed to fetch option snapshots: %s", e)
         
         return result
     
@@ -411,7 +568,7 @@ class UnifiedMarketData:
                     return df
                     
         except Exception as e:
-            logger.error(f"Failed to get bars: {e}")
+            logger.error("Failed to get bars: %s", e)
         
         return pd.DataFrame()
     
