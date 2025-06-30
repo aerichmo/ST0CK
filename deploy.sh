@@ -74,7 +74,7 @@ echo "✓ Database setup complete"
 # Test configuration
 echo ""
 echo "Testing configuration..."
-python3 main_multi.py --list
+python3 main_unified.py
 
 echo ""
 echo "======================================"
@@ -90,7 +90,7 @@ echo "   - DATABASE_URL"
 echo "   - ST0CKG_TRADING_CAPITAL, ST0CKA_TRADING_CAPITAL"
 echo ""
 echo "To run a bot manually:"
-echo "  python3 main_multi.py st0ckg"
+echo "  python3 main_unified.py"
 echo ""
 echo "To enable automated trading:"
 echo "  Push to GitHub and enable Actions"
