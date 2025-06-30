@@ -27,8 +27,7 @@ cp .env.example .env
 # Edit .env with your API credentials
 
 # 3. Run a bot
-python main_multi.py st0ckg  # For ST0CKG strategy
-python main_multi.py st0cka  # For simple stock trading
+python main_unified.py
 ```
 
 ## 🏗️ Architecture
@@ -39,16 +38,16 @@ ST0CK/
 │   ├── st0ckg/                   # ST0CKG options strategy
 │   └── st0cka/                   # Simple stock strategy
 ├── src/
-│   ├── base_engine.py            # Base trading engine
+│   ├── unified_engine.py         # Unified trading engine
 │   ├── unified_market_data.py    # Market data with caching & pooling
 │   ├── connection_pool.py        # API connection management
 │   ├── alpaca_broker.py          # Order execution
-│   ├── multi_bot_database.py     # Multi-bot data persistence
+│   ├── unified_database.py       # Unified database manager
 │   └── risk_manager.py           # Risk management
 ├── public/                       # Web dashboards
 │   ├── index.html               # Performance dashboard
 │   └── metrics.html             # System metrics
-└── main_multi.py                # Bot launcher
+└── main_unified.py              # Unified launcher
 ```
 
 ## 📊 ST0CKG Signal Types

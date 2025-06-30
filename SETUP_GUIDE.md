@@ -107,13 +107,8 @@ Key configuration options:
 
 ```bash
 # List available bots
-python main_multi.py --list
-
-# Run ST0CKG strategy
-python main_multi.py st0ckg
-
-# Run simple stock strategy
-python main_multi.py st0cka
+# Run the unified trading system
+python main_unified.py
 ```
 
 ### Automated Execution (GitHub Actions)
@@ -239,8 +234,8 @@ GROUP BY month;
 Enable verbose logging:
 
 ```python
-# In src/logging_config.py
-configure_logging(log_level=logging.DEBUG)
+# In src/unified_logging.py
+setup_logging(log_level="DEBUG")
 ```
 
 ### Support

@@ -8,25 +8,12 @@ Comprehensive technical documentation for the ST0CK automated trading system.
 
 #### 1. **Trading Engines**
 
-- **BaseEngine** (`src/base_engine.py`)
-  - Abstract base class for all trading engines
+- **UnifiedTradingEngine** (`src/unified_engine.py`)
+  - Single unified engine supporting all strategies
+  - Strategy pattern for different trading approaches
   - Handles broker initialization, market hours, risk checks
-  - Provides common functionality to avoid duplication
-
-- **FastTradingEngine** (`src/base_fast_engine.py`)
-  - High-performance engine for options trading
-  - Pre-fetches option chains at session start
-  - Implements opening range calculations
-
-- **UnifiedSimpleEngine** (`src/unified_simple_engine.py`)
-  - Configurable engine for stock trading
-  - Supports both simple and advanced modes
-  - Used by ST0CKA strategy
-
-- **ST0CKGEngine** (`src/st0ckg_engine.py`)
-  - Specialized for ST0CKG/Battle Lines strategy
-  - Multi-signal pattern recognition
-  - ATM option selection
+  - Pre-fetches option chains when needed
+  - Async operation support
 
 #### 2. **Market Data Layer**
 
@@ -65,11 +52,12 @@ Comprehensive technical documentation for the ST0CK automated trading system.
 
 #### 5. **Data Persistence**
 
-- **MultiBotDatabaseManager** (`src/multi_bot_database.py`)
-  - Supports multiple concurrent bots
+- **UnifiedDatabaseManager** (`src/unified_database.py`)
+  - Supports multiple concurrent strategies
+  - Connection pooling and session management
   - Trade logging and performance tracking
-  - Bot registry management
   - Batched writes for performance
+  - Async operation support
 
 ### Strategy Components
 
@@ -197,7 +185,7 @@ Required before live trading:
 ```bash
 # Development mode with debug logging
 export LOG_LEVEL=DEBUG
-python main_multi.py st0ckg
+python main_unified.py
 ```
 
 ### Production Deployment
