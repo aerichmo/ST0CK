@@ -8,7 +8,7 @@ import pytz
 
 from ..unified_engine import TradingStrategy, Position
 from ..unified_logging import get_logger
-from ..battle_lines_manager import get_latest_battle_lines, save_battle_lines
+from ..unified_database import get_latest_battle_lines, save_battle_lines
 from ..st0ckg_signals import ST0CKGSignalDetector
 from ..options_selector import FastOptionsSelector
 from ..trend_filter_native import TrendFilter
