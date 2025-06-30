@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 import pytz
 from sqlalchemy import Table, Column, String, Float, DateTime, Date, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
-from .database import Base
+from .unified_database import Base
 from .unified_market_data import UnifiedMarketData
 
 logger = logging.getLogger(__name__)

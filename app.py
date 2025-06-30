@@ -69,16 +69,8 @@ def get_metrics():
             app.logger.warning(f"Could not get cache stats: {e}")
             metrics['cache_stats'] = {'error': str(e)}
         
-        # Try to get connection pool statistics
-        try:
-            from src.connection_pool import AlpacaConnectionManager
-            # Get connection manager stats if available
-            if hasattr(market_data, 'connection_manager') and market_data.connection_manager:
-                pool_stats = market_data.connection_manager.get_statistics()
-                metrics['connection_pool_stats'] = pool_stats
-        except Exception as e:
-            app.logger.warning(f"Could not get connection pool stats: {e}")
-            metrics['connection_pool_stats'] = {'error': str(e)}
+        # Connection pool statistics removed - connection_pool.py no longer exists
+        metrics['connection_pool_stats'] = {'status': 'Not implemented in unified architecture'}
         
         # Database connection info
         conn = get_db_connection()

@@ -124,7 +124,10 @@ class TradingService:
             )
             
         except Exception as e:
-            self.logger.error(f"Trade execution failed: {e}", exc_info=True)
+            self.logger.error(f"Trade execution failed: {e}", 
+                            extra={"bot_id": request.bot_id, "symbol": request.symbol, 
+                                   "order_type": request.order_type.value}, 
+                            exc_info=True)
             ErrorReporter.report_failure(request.bot_id, e, {'request': request})
             return TradeResult(success=False, error=str(e))
     
@@ -135,7 +138,8 @@ class TradingService:
             self._log_order_cancellation(bot_id, order_id)
             return True
         except Exception as e:
-            self.logger.error(f"Failed to cancel order {order_id}: {e}")
+            self.logger.error(f"Failed to cancel order {order_id}: {e}", 
+                            extra={"bot_id": bot_id, "order_id": order_id})
             return False
     
     async def modify_order(self, 
@@ -170,7 +174,8 @@ class TradingService:
             return result.success
             
         except Exception as e:
-            self.logger.error(f"Failed to modify order {order_id}: {e}")
+            self.logger.error(f"Failed to modify order {order_id}: {e}", 
+                            extra={"bot_id": bot_id, "order_id": order_id})
             return False
     
     def _validate_request(self, request: TradeRequest) -> Optional[str]:

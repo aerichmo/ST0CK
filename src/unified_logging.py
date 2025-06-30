@@ -17,36 +17,33 @@ from pythonjsonlogger import jsonlogger
 MODULE_LOG_LEVELS = {
     # Critical path modules - reduce verbosity
     'src.unified_market_data': logging.WARNING,
-    'src.market_microstructure': logging.WARNING,
-    'src.apex_signals': logging.WARNING,
-    'src.apex_options_selector': logging.WARNING,
-    'src.database': logging.WARNING,
-    'src.connection_pool': logging.WARNING,
-    'src.multi_bot_database': logging.WARNING,
+    'src.unified_database': logging.WARNING,
+    'src.unified_cache': logging.WARNING,
     
-    # Engine modules - keep INFO for important events
-    'src.apex_engine': logging.INFO,
-    'src.base_fast_engine': logging.INFO,
-    'src.st0ckg_engine': logging.INFO,
-    'src.st0cka_engine': logging.INFO,
-    'src.base_engine': logging.INFO,
+    # Engine and core modules - keep INFO for important events
+    'src.unified_engine': logging.INFO,
+    'src.unified_risk_manager': logging.INFO,
     
     # Strategy modules
-    'bots.st0ckg.strategy': logging.INFO,
-    'bots.st0cka.strategy': logging.INFO,
-    'bots.base.strategy': logging.INFO,
+    'src.strategies.st0ckg_strategy': logging.INFO,
+    'src.strategies.st0cka_strategy': logging.INFO,
     
-    # Less critical modules
-    'src.alert_handlers': logging.INFO,
-    'src.monitoring': logging.INFO,
-    'src.risk_manager': logging.INFO,
-    'src.exit_manager': logging.INFO,
+    # Service modules
+    'src.services.market_analysis_service': logging.INFO,
+    'src.services.position_service': logging.INFO,
+    'src.services.trading_service': logging.INFO,
+    
+    # Supporting modules
     'src.battle_lines_manager': logging.INFO,
-    'src.trend_filter': logging.INFO,
+    'src.st0ckg_signals': logging.INFO,
+    'src.options_selector': logging.INFO,
+    'src.trend_filter_native': logging.INFO,
+    'src.error_reporter': logging.INFO,
     
-    # Debug modules (only errors)
-    'src.alpaca_broker': logging.ERROR,
-    'src.broker_interface': logging.ERROR,
+    # Third-party modules (only errors)
+    'src.alpaca_broker': logging.INFO,
+    'httpx': logging.ERROR,
+    'httpcore': logging.ERROR,
 }
 
 class StructuredFormatter(jsonlogger.JsonFormatter):
