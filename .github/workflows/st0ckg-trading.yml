@@ -48,7 +48,7 @@ jobs:
       run: |
         echo "Starting ST0CKG Battle Lines Bot..."
         mkdir -p logs
-        python main_multi.py st0ckg
+        python main_unified.py st0ckg
       env:
         PYTHONUNBUFFERED: 1
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
