@@ -68,13 +68,27 @@ class ST0CKGEngine(BaseEngine):
         
         # Initialize ST0CKG strategy
         from bots.st0ckg.strategy import ST0CKGStrategy
-        self.strategy = ST0CKGStrategy(self.bot_id, config)
-        self.strategy.initialize(self.market_data)
+        from .error_reporter import ErrorReporter
+        
+        try:
+            self.strategy = ST0CKGStrategy(self.bot_id, config)
+            self.strategy.initialize(self.market_data, self.multi_db)
+        except Exception as e:
+            context = {
+                'bot_id': self.bot_id,
+                'config': config.get('strategy_name', 'Unknown'),
+                'has_database': self.multi_db is not None,
+                'market_data_available': self.market_data is not None
+            }
+            ErrorReporter.report_failure(self.bot_id, e, context)
+            raise RuntimeError(f"ST0CKG strategy initialization failed: {str(e)}")
         
         logger.info(f"[{self.bot_id}] ST0CKG Engine initialized with ${capital:,.2f}, trading window: {self.window_start.strftime('%I:%M %p')} - {self.window_end.strftime('%I:%M %p')}")
     
     def run_trading_cycle(self):
         """Single trading cycle - ultra fast"""
+        from .error_reporter import ErrorReporter
+        
         try:
             # Check if market is open first
             if not self.is_market_open():
@@ -91,10 +105,10 @@ class ST0CKGEngine(BaseEngine):
                 logger.info(f"[{self.bot_id}] Trading cycle at {current_time.strftime('%H:%M:%S')} - Strategy ready")
                 self.last_log_time = datetime.now()
             
-            # Calculate opening range once
+            # Mark opening range as calculated after 9:40
             if not self.opening_range_calculated and current_time >= time(9, 40):
-                self._calculate_opening_range()
                 self.opening_range_calculated = True
+                logger.info(f"[{self.bot_id}] Opening range period complete")
             
             # Check if in trading window using base class method
             if not self.is_within_trading_window():
@@ -105,25 +119,59 @@ class ST0CKGEngine(BaseEngine):
                 return
             
             # Get current SPY data
-            spy_quote = self.market_data.get_spy_quote()
-            if not spy_quote or spy_quote.get('price', 0) <= 0:
-                logger.debug(f"[{self.bot_id}] No valid SPY quote: {spy_quote}")
-                return
+            try:
+                spy_quote = self.market_data.get_spy_quote()
+                if not spy_quote or spy_quote.get('price', 0) <= 0:
+                    raise ValueError(f"Invalid SPY quote received: {spy_quote}")
+            except Exception as e:
+                context = {
+                    'cycle_time': current_time.strftime('%H:%M:%S'),
+                    'market_open': self.is_market_open(),
+                    'in_trading_window': self.is_within_trading_window()
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                raise RuntimeError(f"Failed to get market data: {str(e)}")
             
             # Check for signal from strategy
             try:
-                signal = self.strategy.check_entry_conditions(spy_quote['price'], {'spy_quote': spy_quote})
+                # Build market data context
+                market_context = {
+                    'spy_quote': spy_quote,
+                    'recent_bars': self._get_recent_bars(),
+                    'volume_ratio': self._calculate_volume_ratio(),
+                    'opening_range': self._get_opening_range_data()
+                }
+                
+                signal = self.strategy.check_entry_conditions(spy_quote['price'], market_context)
                 if signal:
                     logger.info(f"[{self.bot_id}] Got signal: {signal}")
                     self._process_signal(signal, spy_quote)
             except Exception as e:
-                logger.error(f"[{self.bot_id}] Error checking entry conditions: {e}", exc_info=True)
+                context = {
+                    'spy_price': spy_quote.get('price', 'Unknown'),
+                    'battle_lines': getattr(self.strategy, 'battle_lines', {}),
+                    'has_position': len(self.positions) > 0
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                
+                # Re-raise if critical
+                if 'CRITICAL' in str(e):
+                    raise
+                else:
+                    logger.error(f"[{self.bot_id}] Error in strategy: {e}")
             
             # Monitor positions
             self._monitor_positions()
             
         except Exception as e:
-            logger.error(f"Error in trading cycle: {e}")
+            if 'CRITICAL' not in str(e):  # Don't double-report critical errors
+                context = {
+                    'engine_state': 'run_trading_cycle',
+                    'positions_count': len(self.positions),
+                    'daily_pnl': self.daily_pnl
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+            raise
     
     def _calculate_opening_range(self):
         """Calculate and cache opening range"""
@@ -146,64 +194,126 @@ class ST0CKGEngine(BaseEngine):
         except Exception as e:
             logger.error(f"Failed to calculate opening range: {e}")
     
+    def _get_recent_bars(self):
+        """Get recent price bars for market context"""
+        try:
+            bars = self.market_data.get_bars('SPY', timeframe='5Min', limit=10)
+            if bars is not None and len(bars) > 0:
+                return bars.to_dict('records')
+        except:
+            pass
+        return []
+    
+    def _calculate_volume_ratio(self):
+        """Calculate current volume vs average"""
+        try:
+            # This would need implementation based on your market data
+            return 1.0
+        except:
+            return 1.0
+    
+    def _get_opening_range_data(self):
+        """Get opening range data if available"""
+        try:
+            # This would need implementation
+            return {}
+        except:
+            return {}
+    
     def _process_signal(self, signal: Dict, spy_quote: Dict):
         """Process trading signal with ST0CKG-specific logic"""
-        logger.info(f"[{self.bot_id}] Processing {signal.get('metadata', {}).get('signal_type', signal.get('type', 'UNKNOWN'))} signal")
+        from .error_reporter import ErrorReporter
         
-        # Check for duplicate signals
-        if self.last_signal_time and (datetime.now() - self.last_signal_time).seconds < 300:
-            logger.debug("Signal cooldown active, skipping")
-            return
+        try:
+            logger.info(f"[{self.bot_id}] Processing {signal.get('metadata', {}).get('primary_signal', 'UNKNOWN')} signal")
+            
+            # Check for duplicate signals
+            if self.last_signal_time and (datetime.now() - self.last_signal_time).seconds < 300:
+                logger.debug("Signal cooldown active, skipping")
+                return
+            
+            # Get signal type (handle both old and new format)
+            signal_type = signal.get('signal_type', signal.get('type', 'UNKNOWN'))
+            
+            # Select option contract
+            try:
+                contract = self.options_selector.select_best_option(
+                    'SPY', 
+                    signal_type,
+                    spy_quote['price']
+                )
+                if not contract:
+                    raise ValueError("No suitable option contract found")
+                    
+                option_symbol = contract.get('contract_symbol')
+                if not option_symbol:
+                    raise ValueError("Option contract missing symbol")
+                    
+            except Exception as e:
+                context = {
+                    'signal_type': signal_type,
+                    'spy_price': spy_quote['price'],
+                    'signal_metadata': signal.get('metadata', {})
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                raise RuntimeError(f"Option selection failed: {str(e)}")
         
-        # Use ST0CKG-specific option selection or fall back to options selector
-        if hasattr(signal, 'direction'):
-            # New strategy format
-            option_symbol = self._select_atm_option(
-                signal['direction'],
-                spy_quote.get('last', spy_quote['price'])
-            )
-        else:
-            # Legacy signal format
-            contract = self.options_selector.select_best_option(
-                'SPY', 
-                signal['type'], 
-                spy_quote['price']
-            )
-            option_symbol = contract.get('contract_symbol') if contract else None
-        
-        if not option_symbol:
-            logger.warning(f"[{self.bot_id}] No suitable option found")
-            return
-        
-        # Get fresh quote
-        quotes = self.market_data.get_option_quotes_batch([option_symbol])
-        if option_symbol not in quotes:
-            logger.error("Failed to get option quote")
-            return
-        
-        quote = quotes[option_symbol]
-        
-        # Calculate position size
-        if hasattr(self.strategy, 'calculate_position_size'):
-            position_size = self.strategy.calculate_position_size(signal, quote['mid'])
-        else:
-            position_size = self.risk_manager.calculate_position_size(
-                quote['ask'],
-                signal.get('stop_level', spy_quote['price'] * 0.99)
-            )
-        
-        if position_size <= 0:
-            logger.warning("Position size too small")
-            return
-        
-        # Place order
-        order_id = self.broker.place_option_order(
-            option_symbol,
-            position_size,
-            'MARKET'
-        )
-        
-        if order_id:
+            # Get fresh quote
+            try:
+                quotes = self.market_data.get_option_quotes_batch([option_symbol])
+                if option_symbol not in quotes:
+                    raise ValueError(f"Failed to get quote for {option_symbol}")
+                quote = quotes[option_symbol]
+            except Exception as e:
+                context = {
+                    'option_symbol': option_symbol,
+                    'signal_type': signal_type
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                raise RuntimeError(f"Option quote failed: {str(e)}")
+            
+            # Calculate position size
+            try:
+                if hasattr(self.strategy, 'calculate_position_size'):
+                    position_size = self.strategy.calculate_position_size(signal, quote['mid'])
+                else:
+                    position_size = self.risk_manager.calculate_position_size(
+                        quote['ask'],
+                        signal.get('stop_level', spy_quote['price'] * 0.99)
+                    )
+                
+                if position_size <= 0:
+                    raise ValueError(f"Invalid position size: {position_size}")
+                    
+            except Exception as e:
+                context = {
+                    'option_price': quote['ask'],
+                    'account_balance': self.capital,
+                    'risk_settings': self.config.get('risk_management', {})
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                raise RuntimeError(f"Position sizing failed: {str(e)}")
+            
+            # Place order
+            try:
+                order_id = self.broker.place_option_order(
+                    option_symbol,
+                    position_size,
+                    'MARKET'
+                )
+                
+                if not order_id:
+                    raise ValueError("Broker returned no order ID")
+                    
+            except Exception as e:
+                context = {
+                    'option_symbol': option_symbol,
+                    'position_size': position_size,
+                    'broker_connected': self.broker.is_connected()
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                raise RuntimeError(f"Order placement failed: {str(e)}")
+            
             # Track position
             position_id = f"SPY_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             self.positions[position_id] = {
@@ -217,19 +327,27 @@ class ST0CKGEngine(BaseEngine):
             }
             
             # Log to database
-            self.db.log_trade({
-                'timestamp': datetime.now(),
-                'symbol': 'SPY',
-                'option_symbol': option_symbol,
-                'action': 'BUY',
-                'quantity': position_size,
-                'price': quote['ask'],
-                'signal_type': signal.get('type', 'UNKNOWN'),
-                'signal_strength': signal.get('strength', 0)
-            })
+            try:
+                self.db.log_trade({
+                    'timestamp': datetime.now(),
+                    'symbol': 'SPY',
+                    'option_symbol': option_symbol,
+                    'action': 'BUY',
+                    'quantity': position_size,
+                    'price': quote['ask'],
+                    'signal_type': signal_type,
+                    'signal_strength': signal.get('strength', 0)
+                })
+            except Exception as e:
+                # Log but don't fail the trade
+                logger.error(f"Failed to log trade to database: {e}")
             
             self.last_signal_time = datetime.now()
             logger.info(f"Opened position: {position_size} {option_symbol} @ ${quote['ask']:.2f}")
+            
+        except Exception as e:
+            # Re-raise all exceptions from signal processing
+            raise
     
     def _select_atm_option(self, direction: str, spot_price: float) -> Optional[str]:
         """Select ATM option - ST0CKG specific"""
@@ -272,49 +390,89 @@ class ST0CKGEngine(BaseEngine):
     
     def _monitor_positions(self):
         """Monitor open positions - fast version"""
+        from .error_reporter import ErrorReporter
+        
         if not self.positions:
             return
         
-        # Get SPY quote once
-        spy_quote = self.market_data.get_spy_quote()
-        current_price = spy_quote['price']
+        try:
+            # Get SPY quote once
+            spy_quote = self.market_data.get_spy_quote()
+            if not spy_quote or spy_quote.get('price', 0) <= 0:
+                raise ValueError("Invalid SPY quote for position monitoring")
+            current_price = spy_quote['price']
         
-        # Get all option quotes in one batch
-        symbols = [pos['symbol'] for pos in self.positions.values()]
-        option_quotes = self.market_data.get_option_quotes_batch(symbols)
-        
-        positions_to_close = []
-        
-        for position_id, position in self.positions.items():
-            symbol = position['symbol']
-            signal_type = position['signal'].get('type', 'UNKNOWN')
+            # Get all option quotes in one batch
+            symbols = [pos['symbol'] for pos in self.positions.values()]
+            try:
+                option_quotes = self.market_data.get_option_quotes_batch(symbols)
+            except Exception as e:
+                context = {
+                    'position_count': len(self.positions),
+                    'symbols': symbols[:5]  # First 5 symbols only
+                }
+                ErrorReporter.report_failure(self.bot_id, e, context)
+                logger.error(f"Failed to get option quotes: {e}")
+                # Continue with SPY-based stops only
+                option_quotes = {}
             
-            # Check stop loss
-            if signal_type == 'LONG' and current_price <= position['stop_loss']:
-                positions_to_close.append((position_id, 'STOP_LOSS'))
-            elif signal_type == 'SHORT' and current_price >= position['stop_loss']:
-                positions_to_close.append((position_id, 'STOP_LOSS'))
+            positions_to_close = []
             
-            # Check time stop (close all 5 minutes before window end)
-            close_time = datetime.combine(datetime.today(), self.window_end) - timedelta(minutes=5)
-            if datetime.now().time() >= close_time.time():
-                positions_to_close.append((position_id, 'TIME_EXIT'))
+            for position_id, position in self.positions.items():
+                try:
+                    symbol = position['symbol']
+                    signal_type = position['signal'].get('signal_type', position['signal'].get('type', 'UNKNOWN'))
+                    
+                    # Check stop loss based on SPY price
+                    if signal_type == 'LONG' and current_price <= position['stop_loss']:
+                        positions_to_close.append((position_id, 'STOP_LOSS'))
+                    elif signal_type == 'SHORT' and current_price >= position['stop_loss']:
+                        positions_to_close.append((position_id, 'STOP_LOSS'))
+                    
+                    # Check time stop (close all 5 minutes before window end)
+                    close_time = datetime.combine(datetime.today(), self.window_end) - timedelta(minutes=5)
+                    if datetime.now().time() >= close_time.time():
+                        positions_to_close.append((position_id, 'TIME_EXIT'))
+                    
+                    # Check profit target if we have option quote
+                    elif symbol in option_quotes:
+                        quote = option_quotes[symbol]
+                        current_value = quote.get('bid', 0)
+                        if current_value > 0 and position['entry_price'] > 0:
+                            pnl_pct = (current_value - position['entry_price']) / position['entry_price']
+                            
+                            if pnl_pct >= 0.20:  # 20% profit target
+                                positions_to_close.append((position_id, 'PROFIT_TARGET'))
+                                
+                except Exception as e:
+                    logger.error(f"Error monitoring position {position_id}: {e}")
+                    # Don't let one position error stop monitoring others
             
-            # Check profit target
-            elif symbol in option_quotes:
-                quote = option_quotes[symbol]
-                current_value = quote['bid']
-                pnl_pct = (current_value - position['entry_price']) / position['entry_price']
-                
-                if pnl_pct >= 0.20:  # 20% profit target
-                    positions_to_close.append((position_id, 'PROFIT_TARGET'))
-        
-        # Close positions
-        for position_id, reason in positions_to_close:
-            self._close_position(position_id, reason)
+            # Close positions
+            for position_id, reason in positions_to_close:
+                try:
+                    self._close_position(position_id, reason)
+                except Exception as e:
+                    context = {
+                        'position_id': position_id,
+                        'reason': reason,
+                        'position_details': self.positions.get(position_id, {})
+                    }
+                    ErrorReporter.report_failure(self.bot_id, e, context)
+                    logger.error(f"Failed to close position {position_id}: {e}")
+                    
+        except Exception as e:
+            context = {
+                'positions_count': len(self.positions),
+                'engine_state': 'position_monitoring'
+            }
+            ErrorReporter.report_failure(self.bot_id, e, context)
+            raise RuntimeError(f"Position monitoring failed: {str(e)}")
     
     def _close_position(self, position_id: str, reason: str):
         """Close position"""
+        from .error_reporter import ErrorReporter
+        
         position = self.positions.get(position_id)
         if not position:
             return
@@ -324,11 +482,15 @@ class ST0CKGEngine(BaseEngine):
             order_id = self.broker.place_option_order(
                 position['symbol'],
                 position['quantity'],
-                'MARKET'
+                'MARKET',
+                side='SELL'
             )
             
-            if order_id:
-                # Log to database
+            if not order_id:
+                raise ValueError("Failed to get order ID from broker")
+            
+            # Log to database
+            try:
                 self.db.log_trade({
                     'timestamp': datetime.now(),
                     'symbol': 'SPY',
@@ -339,17 +501,27 @@ class ST0CKGEngine(BaseEngine):
                     'signal_type': f"EXIT_{reason}",
                     'signal_strength': 0
                 })
-                
-                # Update daily metrics
-                # Note: P&L calculation would need actual fill price
-                self.update_daily_metrics(0, reason == 'PROFIT_TARGET')
-                
-                # Remove from positions
-                del self.positions[position_id]
-                logger.info(f"Closed position {position_id} - Reason: {reason}")
+            except Exception as e:
+                logger.error(f"Failed to log position close to database: {e}")
+            
+            # Update daily metrics
+            # Note: P&L calculation would need actual fill price
+            self.update_daily_metrics(0, reason == 'PROFIT_TARGET')
+            
+            # Remove from positions
+            del self.positions[position_id]
+            logger.info(f"Closed position {position_id} - Reason: {reason}")
                 
         except Exception as e:
-            logger.error(f"Failed to close position: {e}")
+            context = {
+                'position_id': position_id,
+                'reason': reason,
+                'symbol': position.get('symbol', 'Unknown'),
+                'quantity': position.get('quantity', 0),
+                'entry_price': position.get('entry_price', 0)
+            }
+            ErrorReporter.report_failure(self.bot_id, e, context)
+            raise RuntimeError(f"Failed to close position: {str(e)}")
     
     def is_in_active_window(self) -> bool:
         """Check if we're in the active trading window"""

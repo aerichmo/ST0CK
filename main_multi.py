@@ -26,6 +26,7 @@ from src.alpaca_broker import AlpacaBroker
 from src.multi_bot_database import MultiBotDatabaseManager
 from src.performance_config import configure_logging
 from src.base_engine import BaseEngine
+from src.error_reporter import ErrorReporter
 
 load_dotenv()
 
@@ -160,8 +161,14 @@ class BotLauncher:
             return self.engine
             
         except Exception as e:
+            context = {
+                'engine_class': self.bot_info['engine_class'],
+                'config': self.config.get('strategy_name', 'Unknown'),
+                'capital': self.config.get('capital', 0)
+            }
+            ErrorReporter.report_failure(self.bot_id, e, context)
             logger.error(f"Failed to create engine for {self.bot_id}: {e}")
-            raise
+            raise RuntimeError(f"Engine initialization failed: {str(e)}")
     
     def run_startup_checks(self) -> bool:
         """Run startup sanity checks"""
@@ -286,13 +293,48 @@ class BotLauncher:
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
+                    # Report error with context
+                    context = {
+                        'cycle_time': datetime.now().isoformat(),
+                        'market_hours': self.engine.is_market_open() if self.engine else 'Unknown',
+                        'engine_state': 'Running' if self.engine else 'Not initialized'
+                    }
+                    ErrorReporter.report_failure(self.bot_id, e, context)
+                    
+                    # Re-raise if it's a critical error
+                    if any(critical in str(e) for critical in ['CRITICAL', 'battle lines', 'signal detection']):
+                        raise
+                    
+                    # Otherwise, wait and retry
                     logger.error(f"Error in {self.bot_id} trading cycle: {e}")
                     time.sleep(5)
                     
         except KeyboardInterrupt:
             logger.info(f"Shutdown requested for {self.bot_id}")
         except Exception as e:
+            # Report fatal error with full context
+            context = {
+                'bot_config': self.config.get('strategy_name', 'Unknown'),
+                'capital': self.config.get('capital', 0),
+                'start_time': start_time.isoformat() if 'start_time' in locals() else 'Not started',
+                'engine_initialized': self.engine is not None
+            }
+            ErrorReporter.report_failure(self.bot_id, e, context)
             logger.error(f"Fatal error in {self.bot_id}: {e}", exc_info=True)
+            
+            # Exit with specific code based on error type
+            if 'battle lines' in str(e).lower():
+                sys.exit(10)  # Battle lines failure
+            elif 'signal detection' in str(e).lower():
+                sys.exit(20)  # Signal detection failure
+            elif 'market data' in str(e).lower():
+                sys.exit(30)  # Market data failure
+            elif 'database' in str(e).lower():
+                sys.exit(40)  # Database failure
+            elif 'broker' in str(e).lower() or 'alpaca' in str(e).lower():
+                sys.exit(50)  # Broker connection failure
+            else:
+                sys.exit(99)  # Unknown error
         finally:
             if self.engine:
                 self.engine.shutdown()
