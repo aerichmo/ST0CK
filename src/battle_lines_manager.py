@@ -8,32 +8,10 @@ from typing import Dict, Optional, Tuple
 import pytz
 from sqlalchemy import Table, Column, String, Float, DateTime, Date, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
-from .unified_database import Base
+from .unified_database import Base, BattleLines
 from .unified_market_data import UnifiedMarketData
 
 logger = logging.getLogger(__name__)
-
-class BattleLines(Base):
-    """Battle lines storage"""
-    __tablename__ = 'battle_lines'
-    
-    id = Column(String, primary_key=True)
-    bot_id = Column(String, nullable=False)
-    symbol = Column(String, nullable=False)
-    date = Column(Date, nullable=False)
-    pdh = Column(Float, nullable=False)  # Previous Day High
-    pdl = Column(Float, nullable=False)  # Previous Day Low
-    overnight_high = Column(Float, nullable=False)
-    overnight_low = Column(Float, nullable=False)
-    premarket_high = Column(Float, nullable=False)
-    premarket_low = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    __table_args__ = (
-        UniqueConstraint('bot_id', 'symbol', 'date', name='_bot_symbol_date_uc'),
-        Index('idx_battle_lines_lookup', 'bot_id', 'symbol', 'date'),
-    )
 
 
 class BattleLinesManager:

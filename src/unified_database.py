@@ -12,7 +12,7 @@ from collections import defaultdict
 import threading
 from queue import Queue, Empty
 
-from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, JSON, Boolean, Index, event
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, Date, JSON, Boolean, Index, UniqueConstraint, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from sqlalchemy.pool import NullPool, QueuePool, StaticPool
@@ -89,18 +89,25 @@ class BotRegistry(Base):
 class BattleLines(Base):
     __tablename__ = 'battle_lines'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime, nullable=False)
-    pdh = Column(Float)
-    pdl = Column(Float)
-    overnight_high = Column(Float)
-    overnight_low = Column(Float)
-    premarket_high = Column(Float)
-    premarket_low = Column(Float)
+    id = Column(String, primary_key=True)
+    bot_id = Column(String, nullable=False)
+    symbol = Column(String, nullable=False)
+    date = Column(Date, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    pdh = Column(Float, nullable=False)
+    pdl = Column(Float, nullable=False)
+    overnight_high = Column(Float, nullable=False)
+    overnight_low = Column(Float, nullable=False)
+    premarket_high = Column(Float, nullable=False)
+    premarket_low = Column(Float, nullable=False)
     rth_high = Column(Float)
     rth_low = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     __table_args__ = (
+        UniqueConstraint('bot_id', 'symbol', 'date', name='_bot_symbol_date_uc'),
+        Index('idx_battle_lines_lookup', 'bot_id', 'symbol', 'date'),
         Index('idx_battle_lines_timestamp', 'timestamp'),
     )
 
