@@ -110,14 +110,6 @@ Based on enhanced Graystone methodology:
 - **Risk**: Fixed 1 share per trade
 - **Target**: Consistent small gains
 
-## ⚠️ Important Notes
-
-- **Paper trading first** - Test with Alpaca paper account
-- **0DTE options risk** - Can lose 100% rapidly (ST0CKG strategy)
-- **Requires monitoring** - Not set-and-forget
-- **Options approval needed** - Alpaca account must have options enabled for ST0CKG
-- **GitHub Actions** - Automated daily trading via scheduled workflows
-
 ## 📚 Documentation
 
 - [Setup Guide](SETUP_GUIDE.md) - Detailed installation and configuration
