@@ -1,0 +1,377 @@
+"""
+ST0CKG Strategy Implementation
+Preserves exact Battle Lines 0-DTE options trading logic
+"""
+from datetime import datetime, time, timedelta
+from typing import Dict, List, Optional, Any, Tuple
+import pytz
+
+from ..unified_engine import TradingStrategy, Position
+from ..unified_logging import get_logger
+from ..battle_lines_manager import get_latest_battle_lines, save_battle_lines
+from ..st0ckg_signals import ST0CKGSignalDetector
+from ..options_selector import FastOptionsSelector
+from ..trend_filter_native import TrendFilter
+
+class ST0CKGStrategy(TradingStrategy):
+    """
+    Battle Lines 0-DTE Options Strategy
+    - Trades SPY options at key price levels
+    - Uses advanced signal detection
+    - Dynamic position management with R-based targets
+    """
+    
+    def __init__(self, 
+                 db_manager=None,
+                 market_data_provider=None,
+                 start_time: str = "09:40",
+                 end_time: str = "10:30",
+                 max_positions: int = 2):
+        """
+        Initialize ST0CKG strategy
+        
+        Args:
+            db_manager: Database manager for battle lines
+            market_data_provider: Market data provider
+            start_time: Trading window start
+            end_time: Trading window end
+            max_positions: Maximum concurrent positions
+        """
+        self.logger = get_logger(__name__)
+        self.eastern = pytz.timezone('US/Eastern')
+        
+        # Components
+        self.db_manager = db_manager
+        self.market_data = market_data_provider
+        self.signal_detector = ST0CKGSignalDetector()
+        self.options_selector = FastOptionsSelector(market_data_provider)
+        self.trend_filter = TrendFilter()
+        
+        # Trading parameters (DO NOT CHANGE - core strategy logic)
+        self.start_time = start_time
+        self.end_time = end_time
+        self.max_positions = max_positions
+        self.risk_per_trade = 0.01  # 1% risk per trade
+        
+        # Position management parameters
+        self.breakeven_r = 1.0    # Move stop to breakeven at 1R
+        self.scale_r = 1.5        # Scale out 50% at 1.5R
+        self.final_target_r = 3.0 # Final target at 3R
+        
+        # State tracking
+        self.battle_lines = None
+        self.last_battle_lines_update = None
+        self.daily_trades = 0
+        self.last_signal_time = {}  # Track last signal time by type
+        self.signal_cooldown = 300  # 5 minute cooldown between same signal type
+    
+    def get_config(self) -> Dict[str, Any]:
+        """Get strategy configuration"""
+        return {
+            'strategy': 'st0ckg',
+            'trading_window_start': self.start_time,
+            'trading_window_end': self.end_time,
+            'max_positions': self.max_positions,
+            'risk_per_trade': self.risk_per_trade,
+            'cycle_delay': 2,  # 2 second cycle for options
+            'max_consecutive_losses': 3,
+            'max_daily_loss': -500.0,
+            'max_daily_trades': 10
+        }
+    
+    async def get_required_market_data(self, market_data_provider) -> Dict[str, Any]:
+        """Get additional market data required by strategy"""
+        # Update battle lines if needed
+        await self._update_battle_lines()
+        
+        # Get market internals
+        data = {
+            'battle_lines': self.battle_lines,
+            'vix': None,
+            'market_breadth': None
+        }
+        
+        # Get VIX quote
+        try:
+            vix_quote = await market_data_provider.get_quote('VIX')
+            if vix_quote:
+                data['vix'] = vix_quote['price']
+        except:
+            pass
+        
+        return data
+    
+    def check_entry_conditions(self, market_data: Dict[str, Any], positions: Dict[str, Position]) -> Optional[Dict[str, Any]]:
+        """
+        Check for Battle Lines entry signals
+        """
+        now = datetime.now(self.eastern)
+        
+        # Check trading window
+        if not self._in_trading_window(now):
+            return None
+        
+        # Check position limit
+        if len(positions) >= self.max_positions:
+            return None
+        
+        # Check battle lines
+        if not self.battle_lines:
+            self.logger.warning("No battle lines available")
+            return None
+        
+        spy_price = market_data.get('spy_price')
+        if not spy_price:
+            return None
+        
+        # Detect signals
+        signals = self.signal_detector.detect_signals(
+            current_price=spy_price,
+            battle_lines=self.battle_lines,
+            market_data=market_data
+        )
+        
+        if not signals:
+            return None
+        
+        # Get the highest scoring signal
+        best_signal = max(signals.items(), key=lambda x: x[1].get('score', 0))
+        signal_type, signal_data = best_signal
+        
+        # Check signal cooldown
+        last_signal = self.last_signal_time.get(signal_type)
+        if last_signal:
+            seconds_since = (now - last_signal).total_seconds()
+            if seconds_since < self.signal_cooldown:
+                return None
+        
+        # Check trend filter
+        if not self.trend_filter.is_trend_favorable(signal_type, market_data):
+            self.logger.info(f"Signal {signal_type} filtered by trend")
+            return None
+        
+        # Select option contract
+        contract = self.options_selector.select_best_contract(
+            'SPY',
+            signal_type,
+            spy_price,
+            signal_data
+        )
+        
+        if not contract:
+            self.logger.warning(f"No suitable option contract for {signal_type}")
+            return None
+        
+        # Update last signal time
+        self.last_signal_time[signal_type] = now
+        
+        # Return comprehensive signal
+        return {
+            'symbol': contract['symbol'],
+            'signal_type': signal_type,
+            'signal_score': signal_data.get('score', 0),
+            'price': spy_price,
+            'option_contract': contract,
+            'battle_line': signal_data.get('battle_line'),
+            'entry_price': contract['ask'],
+            'timestamp': now,
+            'risk_amount': None  # Will be calculated in position sizing
+        }
+    
+    def get_position_size(self, signal: Dict[str, Any], account_value: float) -> int:
+        """
+        Calculate position size based on 1% risk
+        """
+        risk_amount = account_value * self.risk_per_trade
+        contract = signal['option_contract']
+        
+        # For options, risk is the premium paid
+        premium_per_contract = contract['ask'] * 100  # Options are 100 shares
+        
+        # Calculate number of contracts
+        contracts = int(risk_amount / premium_per_contract)
+        
+        # Minimum 1 contract, maximum based on liquidity
+        contracts = max(1, min(contracts, 10))
+        
+        # Store risk amount in signal for position tracking
+        signal['risk_amount'] = contracts * premium_per_contract
+        
+        return contracts
+    
+    def get_entry_order_params(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get entry order parameters for options
+        """
+        contract = signal['option_contract']
+        
+        # Use limit order at ask or slightly above for quick fill
+        limit_price = contract['ask'] * 1.02  # 2% above ask
+        
+        return {
+            'symbol': contract['symbol'],
+            'side': 'buy',
+            'order_type': 'limit',
+            'limit_price': round(limit_price, 2),
+            'time_in_force': 'day'
+        }
+    
+    def check_exit_conditions(self, position: Position, market_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Check exit conditions for options positions
+        
+        Exit conditions:
+        1. Stop loss hit (option loses 50% of value)
+        2. Breakeven management at 1R
+        3. Scale out at 1.5R
+        4. Final target at 3R
+        5. Time exit near market close
+        6. Signal invalidation
+        """
+        now = datetime.now(self.eastern)
+        
+        # Time exit - close all positions 10 minutes before market close
+        if now.time() >= time(15, 50):
+            return "time_exit"
+        
+        # Check if we have price data
+        if not position.current_price:
+            return None
+        
+        # Get position metadata
+        entry_price = position.entry_price
+        current_price = position.current_price
+        risk_amount = position.strategy_data.get('risk_amount', entry_price * position.quantity * 100)
+        
+        # Calculate R-multiple
+        pnl = (current_price - entry_price) * position.quantity * 100
+        r_multiple = pnl / risk_amount if risk_amount > 0 else 0
+        
+        # Stop loss - option loses 50% of value
+        if current_price <= entry_price * 0.5:
+            return "stop_loss"
+        
+        # Check R-based exits
+        if r_multiple >= self.final_target_r:
+            return "final_target"
+        elif r_multiple >= self.scale_r and not position.strategy_data.get('scaled', False):
+            return "scale_out"
+        elif r_multiple >= self.breakeven_r and not position.strategy_data.get('breakeven_set', False):
+            # Just update stop, don't exit
+            self._update_breakeven_stop(position)
+            return None
+        
+        # Check signal invalidation
+        signal_type = position.strategy_data.get('signal_type')
+        if signal_type and self._is_signal_invalidated(signal_type, market_data):
+            return "signal_invalidated"
+        
+        return None
+    
+    def get_exit_order_params(self, position: Position, exit_reason: str) -> Dict[str, Any]:
+        """
+        Get exit order parameters based on exit reason
+        """
+        # For scale out, only exit half position
+        quantity = position.quantity
+        if exit_reason == "scale_out":
+            quantity = position.quantity // 2
+            # Mark position as scaled
+            position.strategy_data['scaled'] = True
+            position.quantity -= quantity  # Update remaining quantity
+        
+        # Use market orders for all exits (options need quick fills)
+        return {
+            'symbol': position.symbol,
+            'order_type': 'market',
+            'time_in_force': 'day',
+            'quantity': quantity  # Override default quantity for scale outs
+        }
+    
+    async def _update_battle_lines(self):
+        """Update battle lines if needed"""
+        now = datetime.now(self.eastern)
+        
+        # Update once per day at market open
+        if (not self.last_battle_lines_update or 
+            self.last_battle_lines_update.date() != now.date()):
+            
+            # Try to get from database first
+            if self.db_manager:
+                saved_lines = get_latest_battle_lines(self.db_manager)
+                if saved_lines and saved_lines['timestamp'].date() == now.date():
+                    self.battle_lines = saved_lines
+                    self.last_battle_lines_update = now
+                    return
+            
+            # Calculate new battle lines
+            if self.market_data:
+                battle_lines = await self._calculate_battle_lines()
+                if battle_lines:
+                    self.battle_lines = battle_lines
+                    self.last_battle_lines_update = now
+                    
+                    # Save to database
+                    if self.db_manager:
+                        save_battle_lines(self.db_manager, battle_lines)
+    
+    async def _calculate_battle_lines(self) -> Optional[Dict[str, float]]:
+        """Calculate battle lines from market data"""
+        try:
+            # This would normally calculate from historical data
+            # For now, return placeholder
+            spy_quote = await self.market_data.get_quote('SPY')
+            if not spy_quote:
+                return None
+            
+            current = spy_quote['price']
+            
+            # Placeholder calculation (would use real historical data)
+            return {
+                'pdh': current + 2.0,  # Previous day high
+                'pdl': current - 2.0,  # Previous day low
+                'overnight_high': current + 1.0,
+                'overnight_low': current - 1.0,
+                'premarket_high': current + 0.5,
+                'premarket_low': current - 0.5,
+                'rth_high': current + 3.0,
+                'rth_low': current - 3.0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to calculate battle lines: {e}")
+            return None
+    
+    def _in_trading_window(self, now: datetime) -> bool:
+        """Check if within trading window"""
+        start_hour, start_min = map(int, self.start_time.split(':'))
+        end_hour, end_min = map(int, self.end_time.split(':'))
+        
+        window_start = now.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
+        window_end = now.replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+        
+        return window_start <= now <= window_end
+    
+    def _update_breakeven_stop(self, position: Position):
+        """Update position to breakeven stop"""
+        position.strategy_data['breakeven_set'] = True
+        position.strategy_data['stop_price'] = position.entry_price
+        self.logger.info(f"Updated position {position.id} to breakeven stop")
+    
+    def _is_signal_invalidated(self, signal_type: str, market_data: Dict[str, Any]) -> bool:
+        """Check if signal has been invalidated"""
+        spy_price = market_data.get('spy_price')
+        if not spy_price or not self.battle_lines:
+            return False
+        
+        # Signal-specific invalidation logic
+        if 'CALL' in signal_type.upper():
+            # Bullish signals invalidated if price breaks below key support
+            key_support = min(self.battle_lines['pdl'], self.battle_lines['overnight_low'])
+            return spy_price < key_support
+        elif 'PUT' in signal_type.upper():
+            # Bearish signals invalidated if price breaks above key resistance
+            key_resistance = max(self.battle_lines['pdh'], self.battle_lines['overnight_high'])
+            return spy_price > key_resistance
+        
+        return False

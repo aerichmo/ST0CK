@@ -1,609 +1,331 @@
 """
-Unified, cached market data provider for ultra-fast options trading
-Consolidates all data fetching with intelligent caching
+Unified async market data provider
+Replaces ThreadPoolExecutor with native asyncio
 """
-
-import logging
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
-from collections import OrderedDict
-import time
-import threading
-from alpaca.data.historical.option import OptionHistoricalDataClient
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import (
-    OptionSnapshotRequest, 
-    OptionLatestQuoteRequest,
-    StockQuotesRequest,
-    StockBarsRequest
-)
-from alpaca.data.timeframe import TimeFrame
-from .connection_pool import AlpacaConnectionManager
-import pandas as pd
-import os
 import asyncio
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any, Tuple
+import pytz
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockQuotesRequest, StockBarsRequest, StockSnapshotRequest
+from alpaca.data.timeframe import TimeFrame
 
-logger = logging.getLogger(__name__)
-
-
-class TTLCache:
-    """Simple thread-safe TTL cache"""
-    def __init__(self, maxsize: int = 1000, ttl: int = 60):
-        self.maxsize = maxsize
-        self.ttl = ttl
-        self.cache = OrderedDict()
-        self.lock = threading.Lock()
-        
-    def get(self, key: str) -> Optional[Any]:
-        with self.lock:
-            if key in self.cache:
-                value, timestamp = self.cache[key]
-                if time.time() - timestamp < self.ttl:
-                    # Move to end (LRU)
-                    self.cache.move_to_end(key)
-                    return value
-                else:
-                    # Expired
-                    del self.cache[key]
-            return None
-    
-    def set(self, key: str, value: Any):
-        with self.lock:
-            self.cache[key] = (value, time.time())
-            # Enforce maxsize
-            if len(self.cache) > self.maxsize:
-                self.cache.popitem(last=False)
-                
-    def clear(self):
-        with self.lock:
-            self.cache.clear()
-
+from .unified_logging import get_logger, log_performance
+from .unified_cache import UnifiedCache, CacheKeyBuilder, cache_decorator
+from .error_reporter import ErrorReporter
 
 class UnifiedMarketData:
     """
-    Single source of truth for all market data
-    Optimized for SPY options trading with aggressive caching
+    Async market data provider with Redis caching
+    Replaces the old ThreadPoolExecutor-based implementation
     """
     
-    def __init__(self, api_key: str = None, api_secret: str = None, skip_options: bool = False):
-        # Get credentials
-        self.api_key = api_key or os.environ.get('APCA_API_KEY_ID') or os.environ.get('ST0CKAKEY') or os.environ.get('ST0CKGKEY')
-        self.api_secret = api_secret or os.environ.get('APCA_API_SECRET_KEY') or os.environ.get('ST0CKASECRET') or os.environ.get('ST0CKGSECRET')
+    def __init__(self, broker, cache: Optional[UnifiedCache] = None):
+        """
+        Initialize market data provider
         
-        # Debug logging
-        logger.debug("API Key from env: %s", 'Set' if self.api_key else 'Not set')
-        logger.debug("API Secret from env: %s", 'Set' if self.api_secret else 'Not set')
+        Args:
+            broker: Alpaca broker instance
+            cache: Redis cache instance
+        """
+        self.broker = broker
+        self.cache = cache or UnifiedCache()
+        self.logger = get_logger(__name__)
         
-        # Initialize connection manager for pooling and rate limiting
-        self.connection_manager = None
+        # Alpaca data client
+        self.data_client = StockHistoricalDataClient(
+            broker.api_key,
+            broker.api_secret,
+            raw_data=False
+        )
         
-        # Keep legacy clients for backward compatibility
-        self.option_client = None
-        self.stock_client = None
+        # Market timing
+        self.eastern = pytz.timezone('US/Eastern')
         
-        if self.api_key and self.api_secret:
-            # Initialize connection manager
-            try:
-                self.connection_manager = AlpacaConnectionManager(
-                    self.api_key, 
-                    self.api_secret,
-                    base_url=os.environ.get('ALPACA_BASE_URL')
-                )
-                logger.info("Initialized connection pool manager")
-            except Exception as e:
-                logger.warning("Could not initialize connection manager: %s", e)
-                
-                # Fallback to direct clients
-                if not skip_options:
-                    try:
-                        self.option_client = OptionHistoricalDataClient(self.api_key, self.api_secret)
-                    except Exception as e:
-                        logger.warning("Could not initialize option client: %s", e)
-                
-                self.stock_client = StockHistoricalDataClient(self.api_key, self.api_secret)
-        else:
-            logger.warning("No Alpaca API credentials found. Market data will not be available.")
-        
-        # Initialize caches with appropriate TTLs
-        self.quote_cache = TTLCache(maxsize=1000, ttl=5)      # 5 seconds for quotes
-        self.option_cache = TTLCache(maxsize=5000, ttl=60)    # 60 seconds for options
-        self.snapshot_cache = TTLCache(maxsize=2000, ttl=30)  # 30 seconds for snapshots
-        self.bar_cache = TTLCache(maxsize=100, ttl=300)       # 5 minutes for bars
-        self.static_cache = TTLCache(maxsize=50, ttl=3600)    # 1 hour for static data
-        
-        # Pre-fetched data
-        self.current_session_options = {}
-        self.opening_ranges = {}
-        
-        # Cache statistics
-        self.cache_stats = {
-            'hits': 0,
-            'misses': 0,
-            'quote_hits': 0,
-            'quote_misses': 0,
-            'option_hits': 0,
-            'option_misses': 0
+        # Session data
+        self.session_data = {
+            'opening_ranges': {},
+            'session_highs': {},
+            'session_lows': {}
         }
         
-        logger.info("Initialized UnifiedMarketData with aggressive caching")
-    
-    def prefetch_session_data(self, symbol: str = 'SPY'):
-        """Pre-fetch all option data for today's trading session"""
-        try:
-            logger.info("Pre-fetching %s options for trading session...", symbol)
-            
-            # Get next 3 weekly expirations
-            expirations = self._get_weekly_expirations(3)
-            
-            for expiry in expirations:
-                # Pre-fetch option chains for both calls and puts
-                logger.info("Pre-fetching options for %s", expiry.date())
-                
-                # Fetch CALL options
-                call_chain = self.get_option_chain_fast(symbol, expiry, 'CALL')
-                if call_chain:
-                    key = f"{symbol}_{expiry.date()}_C"
-                    self.current_session_options[key] = call_chain
-                
-                # Fetch PUT options
-                put_chain = self.get_option_chain_fast(symbol, expiry, 'PUT')
-                if put_chain:
-                    key = f"{symbol}_{expiry.date()}_P"
-                    self.current_session_options[key] = put_chain
-            
-            logger.info("Pre-fetched %d option chains", len(self.current_session_options))
-            
-        except Exception as e:
-            logger.error("Failed to prefetch session data: %s", e)
-    
-    def warm_quote_cache(self, symbols: list = None):
-        """Pre-warm quote cache for frequently accessed symbols"""
-        if symbols is None:
-            symbols = ['SPY', 'QQQ', 'IWM', 'DIA']  # Common ETFs
+        # Rate limiting
+        self.rate_limiter = asyncio.Semaphore(10)  # Max 10 concurrent requests
         
-        logger.info("Warming quote cache for %d symbols", len(symbols))
-        for symbol in symbols:
-            try:
-                self.get_quote(symbol)
-            except Exception as e:
-                logger.warning("Failed to warm cache for %s: %s", symbol, e)
+        self.logger.info("Unified market data provider initialized")
     
-    def get_cache_stats(self) -> Dict:
-        """Get cache performance statistics"""
-        total_hits = self.cache_stats['quote_hits'] + self.cache_stats['option_hits']
-        total_misses = self.cache_stats['quote_misses'] + self.cache_stats['option_misses']
-        hit_rate = total_hits / (total_hits + total_misses) * 100 if (total_hits + total_misses) > 0 else 0
+    async def initialize(self):
+        """Initialize market data provider"""
+        # Pre-fetch opening range data
+        await self._update_opening_ranges()
         
-        return {
-            'total_hits': total_hits,
-            'total_misses': total_misses,
-            'hit_rate': hit_rate,
-            'quote_hit_rate': self.cache_stats['quote_hits'] / (self.cache_stats['quote_hits'] + self.cache_stats['quote_misses']) * 100 if (self.cache_stats['quote_hits'] + self.cache_stats['quote_misses']) > 0 else 0,
-            'option_hit_rate': self.cache_stats['option_hits'] / (self.cache_stats['option_hits'] + self.cache_stats['option_misses']) * 100 if (self.cache_stats['option_hits'] + self.cache_stats['option_misses']) > 0 else 0,
-            'cache_sizes': {
-                'quotes': len(self.quote_cache.cache),
-                'options': len(self.option_cache.cache),
-                'snapshots': len(self.snapshot_cache.cache),
-                'bars': len(self.bar_cache.cache)
-            }
-        }
+        self.logger.info("Market data initialization complete")
     
-    def get_spy_quote(self) -> Dict:
-        """Get SPY quote with caching"""
-        cache_key = "SPY_quote"
-        cached = self.quote_cache.get(cache_key)
-        if cached:
-            self.cache_stats['quote_hits'] += 1
-            return cached
-        
-        self.cache_stats['quote_misses'] += 1
-        
-        try:
-            # Use connection manager if available
-            if self.connection_manager:
-                quote = self.connection_manager.get_stock_quote("SPY")
-                if quote:
-                    result = {
-                        'symbol': 'SPY',
-                        'price': float(quote.ask_price),
-                        'bid': float(quote.bid_price),
-                        'ask': float(quote.ask_price),
-                        'bid_size': int(quote.bid_size),
-                        'ask_size': int(quote.ask_size),
-                        'timestamp': quote.timestamp
-                    }
-                    self.quote_cache.set(cache_key, result)
-                    return result
-            elif self.stock_client:
-                # Fallback to direct client
-                request = StockQuotesRequest(symbol_or_symbols="SPY", limit=1, feed='iex')
-                quotes = self.stock_client.get_stock_quotes(request)
-                
-                if "SPY" in quotes and quotes["SPY"]:
-                    quote = quotes["SPY"][0]
-                    result = {
-                        'symbol': 'SPY',
-                        'price': float(quote.ask_price),
-                        'bid': float(quote.bid_price),
-                        'ask': float(quote.ask_price),
-                        'bid_size': int(quote.bid_size),
-                        'ask_size': int(quote.ask_size),
-                        'timestamp': quote.timestamp
-                    }
-                    self.quote_cache.set(cache_key, result)
-                    return result
-        except Exception as e:
-            logger.error("Failed to get SPY quote: %s", e)
-        
-        return {'symbol': 'SPY', 'price': 0, 'bid': 0, 'ask': 0}
-    
-    async def get_multiple_quotes_async(self, symbols: List[str]) -> Dict[str, Dict]:
+    @log_performance
+    async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
-        Get multiple stock quotes concurrently using async/await
-        Significantly faster than sequential fetching
+        Get current quote for symbol with caching
+        
+        Returns:
+            Dict with price, bid, ask, volume
         """
-        if self.connection_manager:
-            # Use connection manager's async method
-            return await self.connection_manager.get_multiple_quotes_async(symbols)
-        else:
-            # Fallback to sequential fetching with asyncio
-            loop = asyncio.get_event_loop()
-            tasks = []
-            
-            for symbol in symbols:
-                # Create coroutine for each symbol
-                task = loop.run_in_executor(None, self.get_quote, symbol)
-                tasks.append(task)
-            
-            # Wait for all tasks to complete
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Build result dictionary
-            quote_dict = {}
-            for symbol, result in zip(symbols, results):
-                if isinstance(result, Exception):
-                    logger.warning("Failed to get quote for %s: %s", symbol, result)
-                    quote_dict[symbol] = None
-                else:
-                    quote_dict[symbol] = result
-            
-            return quote_dict
-    
-    def get_quote(self, symbol: str) -> Dict:
-        """Get quote for any symbol with caching"""
-        cache_key = f"{symbol}_quote"
-        cached = self.quote_cache.get(cache_key)
-        if cached:
-            self.cache_stats['quote_hits'] += 1
-            return cached
-        
-        self.cache_stats['quote_misses'] += 1
-        
-        try:
-            if self.connection_manager:
-                quote = self.connection_manager.get_stock_quote(symbol)
-                if quote:
-                    result = {
-                        'symbol': symbol,
-                        'price': float(quote.ask_price),
-                        'bid': float(quote.bid_price),
-                        'ask': float(quote.ask_price),
-                        'bid_size': int(quote.bid_size),
-                        'ask_size': int(quote.ask_size),
-                        'timestamp': quote.timestamp
-                    }
-                    self.quote_cache.set(cache_key, result)
-                    return result
-            elif self.stock_client:
-                request = StockQuotesRequest(symbol_or_symbols=symbol, limit=1, feed='iex')
-                quotes = self.stock_client.get_stock_quotes(request)
-                
-                if symbol in quotes and quotes[symbol]:
-                    quote = quotes[symbol][0]
-                    result = {
-                        'symbol': symbol,
-                        'price': float(quote.ask_price),
-                        'bid': float(quote.bid_price),
-                        'ask': float(quote.ask_price),
-                        'bid_size': int(quote.bid_size),
-                        'ask_size': int(quote.ask_size),
-                        'timestamp': quote.timestamp
-                    }
-                    self.quote_cache.set(cache_key, result)
-                    return result
-        except Exception as e:
-            logger.error("Failed to get quote for %s: %s", symbol, e)
-        
-        return {'symbol': symbol, 'price': 0, 'bid': 0, 'ask': 0}
-    
-    def get_option_chain_fast(self, symbol: str, expiration: datetime, 
-                             option_type: str = 'CALL') -> List[Dict]:
-        """Get option chain - uses pre-fetched data when available"""
-        key = f"{symbol}_{expiration.date()}_{option_type[0]}"
-        
-        # Check pre-fetched data first
-        if key in self.current_session_options:
-            return self.current_session_options[key]
-        
-        # Check cache
-        cached = self.option_cache.get(key)
-        if cached:
-            return cached
-        
-        # Fetch from API using snapshots
-        try:
-            # Get current SPY price
-            spy_quote = self.get_spy_quote()
-            current_price = spy_quote['price']
-            
-            # Calculate ATM strike range (within 2% of current price)
-            min_strike = int(current_price * 0.98)
-            max_strike = int(current_price * 1.02)
-            
-            # Build list of potential option symbols
-            options = []
-            exp_str = expiration.strftime('%y%m%d')
-            
-            for strike in range(min_strike, max_strike + 1):
-                # Format: SPY231215C400 (SPY + YYMMDD + C/P + Strike)
-                opt_type = 'C' if option_type == 'CALL' else 'P'
-                contract_symbol = f"SPY{exp_str}{opt_type}{strike:03d}000"
-                
-                options.append({
-                    'contract_symbol': contract_symbol,
-                    'strike': float(strike),
-                    'expiration': expiration.isoformat(),
-                    'option_type': option_type
-                })
-            
-            self.option_cache.set(key, options)
-            return options
-            
-        except Exception as e:
-            logger.error("Failed to fetch option chain: %s", e)
-            return []
-    
-    def get_option_quotes_batch(self, symbols: List[str]) -> Dict[str, Dict]:
-        """Get multiple option quotes in a single API call"""
         # Check cache first
-        result = {}
-        uncached_symbols = []
-        
-        for symbol in symbols:
-            cached = self.quote_cache.get(f"option_{symbol}")
-            if cached:
-                result[symbol] = cached
-            else:
-                uncached_symbols.append(symbol)
-        
-        # Fetch uncached in batch
-        if uncached_symbols:
-            try:
-                request = OptionLatestQuoteRequest(symbol_or_symbols=uncached_symbols)
-                quotes = self.option_client.get_option_latest_quote(request)
-                
-                for symbol, quote in quotes.items():
-                    quote_dict = {
-                        'symbol': symbol,
-                        'bid': float(quote.bid_price) if quote.bid_price else 0,
-                        'ask': float(quote.ask_price) if quote.ask_price else 0,
-                        'bid_size': int(quote.bid_size) if quote.bid_size else 0,
-                        'ask_size': int(quote.ask_size) if quote.ask_size else 0,
-                        'mid': float((quote.bid_price + quote.ask_price) / 2) if quote.bid_price and quote.ask_price else 0,
-                        'timestamp': quote.timestamp.isoformat() if quote.timestamp else datetime.now().isoformat()
-                    }
-                    result[symbol] = quote_dict
-                    self.quote_cache.set(f"option_{symbol}", quote_dict)
-                    
-            except Exception as e:
-                logger.error("Failed to fetch option quotes batch: %s", e)
-        
-        return result
-    
-    def get_option_snapshot_batch(self, symbols: List[str]) -> Dict[str, Dict]:
-        """Get option snapshots with Greeks in batch"""
-        # Check cache
-        result = {}
-        uncached_symbols = []
-        
-        for symbol in symbols:
-            cached = self.snapshot_cache.get(symbol)
-            if cached:
-                result[symbol] = cached
-            else:
-                uncached_symbols.append(symbol)
-        
-        # Fetch uncached
-        if uncached_symbols:
-            try:
-                request = OptionSnapshotRequest(symbol_or_symbols=uncached_symbols)
-                snapshots = self.option_client.get_option_snapshot(request)
-                
-                for symbol, snapshot in snapshots.items():
-                    if snapshot.latest_quote and snapshot.greeks:
-                        snapshot_dict = {
-                            'symbol': symbol,
-                            'quote': {
-                                'bid': float(snapshot.latest_quote.bid_price) if snapshot.latest_quote.bid_price else 0,
-                                'ask': float(snapshot.latest_quote.ask_price) if snapshot.latest_quote.ask_price else 0,
-                                'mid': float((snapshot.latest_quote.bid_price + snapshot.latest_quote.ask_price) / 2) 
-                                       if snapshot.latest_quote.bid_price and snapshot.latest_quote.ask_price else 0
-                            },
-                            'greeks': {
-                                'delta': float(snapshot.greeks.delta) if snapshot.greeks.delta else 0,
-                                'gamma': float(snapshot.greeks.gamma) if snapshot.greeks.gamma else 0,
-                                'theta': float(snapshot.greeks.theta) if snapshot.greeks.theta else 0,
-                                'vega': float(snapshot.greeks.vega) if snapshot.greeks.vega else 0,
-                                'rho': float(snapshot.greeks.rho) if snapshot.greeks.rho else 0
-                            },
-                            'iv': float(snapshot.implied_volatility) if snapshot.implied_volatility else 0,
-                            'volume': int(snapshot.latest_trade.size) if snapshot.latest_trade else 0,
-                            'oi': int(snapshot.open_interest) if snapshot.open_interest else 0
-                        }
-                        result[symbol] = snapshot_dict
-                        self.snapshot_cache.set(symbol, snapshot_dict)
-                        
-            except Exception as e:
-                logger.error("Failed to fetch option snapshots: %s", e)
-        
-        return result
-    
-    def find_best_options(self, symbol: str, expiration: datetime,
-                         option_type: str, target_delta: float = 0.40) -> List[Dict]:
-        """Find best options by criteria - optimized version"""
-        # Get all contracts (from cache/prefetch)
-        contracts = self.get_option_chain_fast(symbol, expiration, option_type)
-        
-        if not contracts:
-            return []
-        
-        # Get current SPY price
-        spy_quote = self.get_spy_quote()
-        current_price = spy_quote['price']
-        
-        # Filter by strike proximity (reduce API calls)
-        if option_type == 'CALL':
-            # For calls, look at strikes near current price
-            min_strike = current_price * 0.98
-            max_strike = current_price * 1.05
-        else:
-            # For puts, look at strikes near current price
-            min_strike = current_price * 0.95
-            max_strike = current_price * 1.02
-        
-        filtered_contracts = [
-            c for c in contracts 
-            if min_strike <= c['strike'] <= max_strike
-        ]
-        
-        # Get snapshots for filtered contracts (batch)
-        symbols = [c['contract_symbol'] for c in filtered_contracts]
-        if not symbols:
-            return []
-        
-        snapshots = self.get_option_snapshot_batch(symbols[:20])  # Limit to 20 for speed
-        
-        # Find best matches
-        candidates = []
-        for contract in filtered_contracts:
-            symbol = contract['contract_symbol']
-            if symbol in snapshots:
-                snapshot = snapshots[symbol]
-                delta = abs(snapshot['greeks']['delta'])
-                delta_diff = abs(delta - target_delta)
-                
-                if delta_diff <= 0.1:  # Within tolerance
-                    candidates.append({
-                        **contract,
-                        **snapshot['quote'],
-                        'delta': delta,
-                        'delta_diff': delta_diff,
-                        'iv': snapshot['iv'],
-                        'volume': snapshot['volume'],
-                        'oi': snapshot['oi'],
-                        'greeks': snapshot['greeks']
-                    })
-        
-        # Sort by delta match and liquidity
-        candidates.sort(key=lambda x: (x['delta_diff'], -(x['volume'] + x['oi'])))
-        
-        return candidates[:5]  # Return top 5
-    
-    def get_opening_range(self, symbol: str) -> Optional[Dict]:
-        """Get cached opening range"""
-        return self.opening_ranges.get(symbol)
-    
-    def set_opening_range(self, symbol: str, or_high: float, or_low: float):
-        """Cache opening range for the session"""
-        self.opening_ranges[symbol] = {
-            'high': or_high,
-            'low': or_low,
-            'range': or_high - or_low,
-            'timestamp': datetime.now()
-        }
-    
-    def get_5min_bars(self, symbol: str, lookback_days: int = 1) -> pd.DataFrame:
-        """Get 5-minute bars with caching"""
-        cache_key = f"{symbol}_5min_{lookback_days}"
-        cached = self.bar_cache.get(cache_key)
-        if cached is not None:
+        cache_key = CacheKeyBuilder.quote(symbol)
+        cached = self.cache.get(cache_key)
+        if cached:
             return cached
         
         try:
-            end = datetime.now()
-            start = end - timedelta(days=lookback_days)
-            
-            request = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=TimeFrame.Minute,
-                start=start,
-                end=end,
-                limit=1000,
-                feed='iex'  # Use IEX feed to avoid SIP subscription requirement
-            )
-            
-            bars = self.stock_client.get_stock_bars(request)
-            
-            if symbol in bars and bars[symbol]:
-                df = pd.DataFrame([{
-                    'open': float(bar.open),
-                    'high': float(bar.high),
-                    'low': float(bar.low),
-                    'close': float(bar.close),
-                    'volume': int(bar.volume),
-                    'timestamp': bar.timestamp
-                } for bar in bars[symbol]])
+            async with self.rate_limiter:
+                # Use asyncio.to_thread for sync API calls
+                request = StockQuotesRequest(symbol_or_symbols=symbol)
+                quotes = await asyncio.to_thread(
+                    self.data_client.get_stock_latest_quote,
+                    request
+                )
                 
-                if not df.empty:
-                    df.set_index('timestamp', inplace=True)
-                    df = df.resample('5T').agg({
-                        'open': 'first',
-                        'high': 'max',
-                        'low': 'min',
-                        'close': 'last',
-                        'volume': 'sum'
-                    }).dropna()
+                if symbol in quotes:
+                    quote = quotes[symbol]
+                    result = {
+                        'symbol': symbol,
+                        'price': float(quote.ask_price + quote.bid_price) / 2,
+                        'bid': float(quote.bid_price),
+                        'ask': float(quote.ask_price),
+                        'bid_size': int(quote.bid_size),
+                        'ask_size': int(quote.ask_size),
+                        'timestamp': quote.timestamp
+                    }
                     
-                    self.bar_cache.set(cache_key, df)
-                    return df
+                    # Cache the result
+                    self.cache.set(cache_key, result, UnifiedCache.TTL_QUOTES)
+                    
+                    return result
                     
         except Exception as e:
-            logger.error("Failed to get bars: %s", e)
-        
-        return pd.DataFrame()
-    
-    def _get_weekly_expirations(self, num_weeks: int = 3) -> List[datetime]:
-        """Get next N weekly option expirations including 0DTE"""
-        expirations = []
-        today = datetime.now()
-        
-        # Add today if it's a weekday and before 4 PM (0DTE)
-        if today.weekday() < 5 and today.hour < 16:
-            expirations.append(today)
-        
-        # Add weekly expirations
-        for i in range(num_weeks):
-            days_ahead = i * 7
-            target_date = today + timedelta(days=days_ahead)
+            self.logger.error(f"Failed to get quote for {symbol}: {e}")
             
-            # Find next Friday
-            days_until_friday = (4 - target_date.weekday()) % 7
-            if days_until_friday == 0 and target_date.hour >= 16:
-                days_until_friday = 7
-            
-            expiry = target_date + timedelta(days=days_until_friday)
-            if expiry.date() != today.date():  # Don't duplicate today
-                expirations.append(expiry)
-        
-        return expirations[:num_weeks]
+        return None
     
-    def clear_caches(self):
-        """Clear all caches - useful at session start"""
-        self.quote_cache.clear()
-        self.option_cache.clear()
-        self.snapshot_cache.clear()
-        self.bar_cache.clear()
-        self.static_cache.clear()
-        self.current_session_options.clear()
-        self.opening_ranges.clear()
-        logger.info("Cleared all caches")
+    async def get_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Get quotes for multiple symbols concurrently"""
+        tasks = [self.get_quote(symbol) for symbol in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        quotes = {}
+        for symbol, result in zip(symbols, results):
+            if isinstance(result, dict):
+                quotes[symbol] = result
+            else:
+                self.logger.error(f"Failed to get quote for {symbol}: {result}")
+        
+        return quotes
+    
+    @log_performance
+    async def get_bars(self, 
+                      symbol: str, 
+                      timeframe: TimeFrame = TimeFrame.Minute,
+                      limit: int = 100) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get historical bars with caching
+        
+        Returns:
+            List of bar dictionaries
+        """
+        # Check cache
+        cache_key = CacheKeyBuilder.bars(symbol, str(timeframe))
+        cached = self.cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            async with self.rate_limiter:
+                now = datetime.now(self.eastern)
+                start = now - timedelta(minutes=limit)
+                
+                request = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=timeframe,
+                    start=start,
+                    end=now
+                )
+                
+                bars_data = await asyncio.to_thread(
+                    self.data_client.get_stock_bars,
+                    request
+                )
+                
+                bars = []
+                if symbol in bars_data:
+                    for bar in bars_data[symbol]:
+                        bars.append({
+                            'timestamp': bar.timestamp,
+                            'open': float(bar.open),
+                            'high': float(bar.high),
+                            'low': float(bar.low),
+                            'close': float(bar.close),
+                            'volume': int(bar.volume),
+                            'vwap': float(bar.vwap) if hasattr(bar, 'vwap') else None
+                        })
+                
+                # Cache the result
+                if bars:
+                    self.cache.set(cache_key, bars, UnifiedCache.TTL_BARS)
+                
+                return bars
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get bars for {symbol}: {e}")
+            
+        return None
+    
+    async def get_option_chain(self, 
+                              symbol: str,
+                              expiration: datetime,
+                              option_type: str = 'both') -> Optional[List[Dict[str, Any]]]:
+        """
+        Get option chain data with caching
+        
+        Args:
+            symbol: Underlying symbol
+            expiration: Option expiration date
+            option_type: 'call', 'put', or 'both'
+            
+        Returns:
+            List of option contracts
+        """
+        # Check cache
+        exp_str = expiration.strftime('%Y-%m-%d')
+        cache_key = CacheKeyBuilder.option_chain(symbol, exp_str, option_type)
+        cached = self.cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            async with self.rate_limiter:
+                # Get option contracts from broker
+                contracts = await asyncio.to_thread(
+                    self.broker.get_option_contracts,
+                    symbol,
+                    expiration,
+                    option_type
+                )
+                
+                if contracts:
+                    # Get quotes for all contracts concurrently
+                    contract_symbols = [c['symbol'] for c in contracts]
+                    quotes = await self.get_quotes(contract_symbols)
+                    
+                    # Merge contract and quote data
+                    for contract in contracts:
+                        if contract['symbol'] in quotes:
+                            quote = quotes[contract['symbol']]
+                            contract.update({
+                                'bid': quote['bid'],
+                                'ask': quote['ask'],
+                                'mid': (quote['bid'] + quote['ask']) / 2,
+                                'spread': quote['ask'] - quote['bid']
+                            })
+                    
+                    # Cache the result
+                    self.cache.set(cache_key, contracts, UnifiedCache.TTL_OPTIONS)
+                    
+                    return contracts
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to get option chain for {symbol}: {e}")
+            
+        return None
+    
+    async def get_option_snapshot(self, option_symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed option snapshot with Greeks
+        
+        Returns:
+            Dict with price, Greeks, volume, OI
+        """
+        # Check cache
+        cache_key = CacheKeyBuilder.option_snapshot(option_symbol)
+        cached = self.cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            async with self.rate_limiter:
+                # Get option snapshot from broker
+                snapshot = await asyncio.to_thread(
+                    self.broker.get_option_snapshot,
+                    option_symbol
+                )
+                
+                if snapshot:
+                    # Cache the result
+                    self.cache.set(cache_key, snapshot, UnifiedCache.TTL_SNAPSHOTS)
+                    
+                return snapshot
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get option snapshot for {option_symbol}: {e}")
+            
+        return None
+    
+    async def _update_opening_ranges(self):
+        """Update opening range data for key symbols"""
+        symbols = ['SPY', 'QQQ', 'IWM', 'VIX']
+        
+        try:
+            # Get first 30 minutes of data
+            now = datetime.now(self.eastern)
+            market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+            
+            if now.time() >= market_open.time():
+                tasks = []
+                for symbol in symbols:
+                    task = self._calculate_opening_range(symbol)
+                    tasks.append(task)
+                
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for symbol, result in zip(symbols, results):
+                    if isinstance(result, dict):
+                        self.session_data['opening_ranges'][symbol] = result
+                        
+                        # Cache the result
+                        cache_key = CacheKeyBuilder.opening_range(symbol, now.strftime('%Y-%m-%d'))
+                        self.cache.set(cache_key, result, UnifiedCache.TTL_STATIC)
+                        
+        except Exception as e:
+            self.logger.error(f"Failed to update opening ranges: {e}")
+    
+    async def _calculate_opening_range(self, symbol: str) -> Optional[Dict[str, float]]:
+        """Calculate opening range for a symbol"""
+        try:
+            # Get first 30 minutes of bars
+            bars = await self.get_bars(symbol, TimeFrame.Minute, limit=30)
+            
+            if bars and len(bars) >= 30:
+                # First 30 minutes
+                opening_bars = bars[:30]
+                
+                high = max(bar['high'] for bar in opening_bars)
+                low = min(bar['low'] for bar in opening_bars)
+                
+                return {
+                    'high': high,
+                    'low': low,
+                    'range': high - low,
+                    'midpoint': (high + low) / 2
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Failed to calculate opening range for {symbol}: {e}")
+            
+        return None
+    
+    def get_cached_stats(self) -> Dict[str, Any]:
+        """Get cache performance statistics"""
+        return self.cache.get_stats()
+    
+    async def close(self):
+        """Close connections"""
+        # Nothing to close for async implementation
+        self.logger.info("Market data provider closed")

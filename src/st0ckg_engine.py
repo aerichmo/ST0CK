@@ -6,12 +6,11 @@ import logging
 from datetime import datetime, time, timedelta
 from typing import Dict, Optional
 import os
-import pandas as pd
 
 from .base_engine import BaseEngine
 from .unified_market_data import UnifiedMarketData
 from .options_selector import FastOptionsSelector
-from .trend_filter import TrendFilter
+from .trend_filter_native import TrendFilter
 from .multi_bot_database import MultiBotDatabaseManager
 
 logger = logging.getLogger(__name__)
