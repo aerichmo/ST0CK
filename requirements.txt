@@ -8,8 +8,7 @@ numpy==1.26.2                  # Numerical operations
 # Database
 sqlalchemy==2.0.23             # ORM
 psycopg2-binary==2.9.9         # PostgreSQL driver
-redis==5.0.1                   # High-performance caching
-aioredis==2.0.1               # Async Redis client
+redis==5.0.1                   # High-performance caching (includes async support)
 
 # Essential utilities
 python-dotenv==1.0.0           # Environment variables

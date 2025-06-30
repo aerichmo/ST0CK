@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List, Union, Callable
 from functools import wraps
 import asyncio
 import redis
-import aioredis
+from redis import asyncio as aioredis
 from redis.exceptions import RedisError, ConnectionError as RedisConnectionError
 
 from .unified_logging import get_logger, LogContext
@@ -140,7 +140,7 @@ class UnifiedCache:
     async def async_client(self) -> aioredis.Redis:
         """Get or create async Redis client"""
         if self._async_client is None:
-            self._async_client = await aioredis.from_url(
+            self._async_client = aioredis.from_url(
                 self.redis_url,
                 max_connections=50,
                 decode_responses=False,
