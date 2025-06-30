@@ -69,7 +69,7 @@ class RiskMetrics(Base):
     timestamp = Column(DateTime, nullable=False)
     metric_type = Column(String, nullable=False)
     value = Column(Float, nullable=False)
-    metadata = Column(JSON)
+    metric_metadata = Column(JSON)
     
     __table_args__ = (
         Index('idx_risk_bot_time', 'bot_id', 'timestamp'),
@@ -356,7 +356,7 @@ class UnifiedDatabaseManager:
             'timestamp': datetime.now(),
             'metric_type': metric_type,
             'value': value,
-            'metadata': metadata or {}
+            'metric_metadata': metadata or {}
         }
         
         self.metrics_queue.put(metric_data)
