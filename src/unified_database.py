@@ -83,7 +83,6 @@ class BotRegistry(Base):
     created_at = Column(DateTime, nullable=False)
     config = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
-    last_seen = Column(DateTime)
     performance_stats = Column(JSON)
 
 class BattleLines(Base):
@@ -413,7 +412,6 @@ class UnifiedDatabaseManager:
             
             if bot:
                 # Update existing bot
-                bot.last_seen = datetime.now()
                 bot.config = config
                 bot.is_active = True
             else:
@@ -422,8 +420,7 @@ class UnifiedDatabaseManager:
                     bot_id=bot_id,
                     created_at=datetime.now(),
                     config=config,
-                    is_active=True,
-                    last_seen=datetime.now()
+                    is_active=True
                 )
                 session.add(bot)
             
