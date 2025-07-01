@@ -43,7 +43,7 @@ class ST0CKGStrategy(TradingStrategy):
         # Components
         self.db_manager = db_manager
         self.market_data = market_data_provider
-        self.signal_detector = ST0CKGSignalDetector()
+        self.signal_detector = ST0CKGSignalDetector(market_data_provider)
         self.options_selector = FastOptionsSelector(market_data_provider)
         self.trend_filter = TrendFilter()
         
@@ -127,10 +127,11 @@ class ST0CKGStrategy(TradingStrategy):
             return None
         
         # Detect signals
-        signals = self.signal_detector.detect_signals(
+        signals = self.signal_detector.detect_all_signals(
+            symbol='SPY',
             current_price=spy_price,
             battle_lines=self.battle_lines,
-            market_data=market_data
+            market_context=market_data
         )
         
         if not signals:
