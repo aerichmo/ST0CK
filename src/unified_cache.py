@@ -14,6 +14,7 @@ from redis import asyncio as aioredis
 from redis.exceptions import RedisError, ConnectionError as RedisConnectionError
 
 from .unified_logging import get_logger, LogContext
+from .memory_cache import InMemoryCache
 
 class CacheKeyBuilder:
     """Standardized cache key generation"""
@@ -94,6 +95,12 @@ class UnifiedCache:
         # Initialize async Redis client (lazy)
         self._async_client = None
         
+        # Use in-memory fallback if Redis not available
+        self.use_memory_fallback = self.redis_client is None
+        if self.use_memory_fallback:
+            self.memory_cache = InMemoryCache()
+            self.logger.info(f"[{self.bot_id}] Using in-memory cache fallback")
+        
         # Cache statistics
         self.stats = {
             'hits': 0,
@@ -132,21 +139,28 @@ class UnifiedCache:
             return client
             
         except RedisError as e:
-            self.logger.error(f"[{self.bot_id}] Failed to connect to Redis: {e}")
-            # Return None to fallback to no caching
+            self.logger.warning(f"[{self.bot_id}] Redis not available, using in-memory cache: {e}")
+            # Return None to use in-memory fallback
             return None
     
     @property
-    async def async_client(self) -> aioredis.Redis:
+    async def async_client(self):
         """Get or create async Redis client"""
+        if self.use_memory_fallback:
+            return self.memory_cache
+            
         if self._async_client is None:
-            self._async_client = aioredis.from_url(
-                self.redis_url,
-                max_connections=50,
-                decode_responses=False,
-                retry_on_timeout=True,
-                health_check_interval=30
-            )
+            try:
+                self._async_client = aioredis.from_url(
+                    self.redis_url,
+                    max_connections=50,
+                    decode_responses=False,
+                    retry_on_timeout=True,
+                    health_check_interval=30
+                )
+            except Exception:
+                # Fallback to memory cache for async too
+                return self.memory_cache
         return self._async_client
     
     def _safe_url(self) -> str:
@@ -174,11 +188,12 @@ class UnifiedCache:
     
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""
-        if not self.redis_client:
+        client = self.memory_cache if self.use_memory_fallback else self.redis_client
+        if not client:
             return None
         
         try:
-            data = self.redis_client.get(key)
+            data = client.get(key)
             if data:
                 self.stats['hits'] += 1
                 return self._deserialize(data)
@@ -186,25 +201,26 @@ class UnifiedCache:
                 self.stats['misses'] += 1
                 return None
                 
-        except RedisError as e:
+        except Exception as e:
             self.stats['errors'] += 1
             self.logger.error(f"[{self.bot_id}] Cache get error for {key}: {e}")
             return None
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set value in cache with optional TTL"""
-        if not self.redis_client:
+        client = self.memory_cache if self.use_memory_fallback else self.redis_client
+        if not client:
             return False
         
         try:
             data = self._serialize(value)
             if ttl:
-                self.redis_client.setex(key, ttl, data)
+                client.setex(key, ttl, data) if hasattr(client, 'setex') else client.set(key, data, ex=ttl)
             else:
-                self.redis_client.set(key, data)
+                client.set(key, data)
             return True
             
-        except RedisError as e:
+        except Exception as e:
             self.stats['errors'] += 1
             self.logger.error(f"[{self.bot_id}] Cache set error for {key}: {e}")
             return False

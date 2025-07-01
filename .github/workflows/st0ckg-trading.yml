@@ -65,6 +65,7 @@ jobs:
         ST0CKGKEY: ${{ secrets.STOCKGKEY }}
         ST0CKGSECRET: ${{ secrets.ST0CKGSECRET }}
         ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
+        CI: true  # This will make Redis use in-memory fallback
     
     - name: Upload logs
       if: always()
