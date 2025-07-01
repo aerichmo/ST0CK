@@ -499,18 +499,37 @@ class UnifiedDatabaseManager:
 # Battle lines specific functions (preserved from battle_lines_manager.py)
 def save_battle_lines(db_manager: UnifiedDatabaseManager, battle_lines_data: Dict[str, float]):
     """Save battle lines data"""
+    import uuid
+    from datetime import date
+    
     with db_manager.session_scope() as session:
+        # Generate unique ID and set required fields
+        battle_lines_id = str(uuid.uuid4())
+        today = date.today()
+        
         battle_lines = BattleLines(
+            id=battle_lines_id,
+            bot_id=db_manager.bot_id,
+            symbol='SPY',  # Battle lines are always for SPY
+            date=today,
             timestamp=datetime.now(),
             **battle_lines_data
         )
         session.add(battle_lines)
-        db_manager.logger.info("Battle lines saved to database")
+        db_manager.logger.info(f"Battle lines saved to database for {today}")
 
 def get_latest_battle_lines(db_manager: UnifiedDatabaseManager) -> Optional[Dict[str, float]]:
     """Get the most recent battle lines"""
+    from datetime import date
+    
     with db_manager.session_scope() as session:
-        latest = session.query(BattleLines).order_by(BattleLines.timestamp.desc()).first()
+        # Get today's battle lines for this bot
+        today = date.today()
+        latest = session.query(BattleLines).filter(
+            BattleLines.bot_id == db_manager.bot_id,
+            BattleLines.symbol == 'SPY',
+            BattleLines.date == today
+        ).order_by(BattleLines.timestamp.desc()).first()
         
         if latest:
             return {
