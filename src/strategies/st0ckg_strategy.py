@@ -44,7 +44,14 @@ class ST0CKGStrategy(TradingStrategy):
         self.db_manager = db_manager
         self.market_data = market_data_provider
         self.signal_detector = ST0CKGSignalDetector(market_data_provider)
-        self.options_selector = FastOptionsSelector(market_data_provider)
+        # Options configuration
+        options_config = {
+            "options": {
+                "target_delta": 0.30,  # Target delta for options
+                "delta_tolerance": 0.10  # Delta tolerance range
+            }
+        }
+        self.options_selector = FastOptionsSelector(options_config, market_data_provider)
         self.trend_filter = TrendFilter()
         
         # Trading parameters (DO NOT CHANGE - core strategy logic)
@@ -154,16 +161,15 @@ class ST0CKGStrategy(TradingStrategy):
             return None
         
         # Select option contract
-        contract = self.options_selector.select_best_contract(
+        contract = self.options_selector.select_best_option(
             'SPY',
             signal_type,
-            spy_price,
-            signal_data
+            spy_price
         )
         
         if not contract:
             self.logger.warning(f"No suitable option contract for {signal_type}", 
-                              extra={"bot_id": self.bot_id, "signal_type": signal_type, "current_price": price})
+                              extra={"bot_id": self.bot_id, "signal_type": signal_type, "current_price": spy_price})
             return None
         
         # Update last signal time
