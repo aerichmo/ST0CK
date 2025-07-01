@@ -32,21 +32,21 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         echo "Verifying database schema..."
-        python -c "
-import os
-from sqlalchemy import create_engine, text
-engine = create_engine(os.getenv('DATABASE_URL'))
-with engine.connect() as conn:
-    result = conn.execute(text('SELECT column_name FROM information_schema.columns WHERE table_name = \\'trades\\' ORDER BY column_name'))
-    columns = [row[0] for row in result]
-    print('Columns in trades table:')
-    for col in columns:
-        print(f'  - {col}')
-    
-    # Test the query that was failing
-    try:
-        conn.execute(text('SELECT id, bot_id, symbol, action, quantity FROM trades LIMIT 1'))
-        print('\\n✅ Test query successful!')
-    except Exception as e:
-        print(f'\\n❌ Test query failed: {e}')
-        "
+        python3 << 'EOF'
+        import os
+        from sqlalchemy import create_engine, text
+        engine = create_engine(os.getenv('DATABASE_URL'))
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'trades' ORDER BY column_name"))
+            columns = [row[0] for row in result]
+            print('Columns in trades table:')
+            for col in columns:
+                print(f'  - {col}')
+            
+            # Test the query that was failing
+            try:
+                conn.execute(text('SELECT id, bot_id, symbol, action, quantity FROM trades LIMIT 1'))
+                print('\n✅ Test query successful!')
+            except Exception as e:
+                print(f'\n❌ Test query failed: {e}')
+        EOF
