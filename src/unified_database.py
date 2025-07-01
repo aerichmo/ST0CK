@@ -82,7 +82,7 @@ class BotRegistry(Base):
     bot_id = Column(String, primary_key=True)
     created_at = Column(DateTime, nullable=False)
     config = Column(JSON, nullable=False)
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     last_seen = Column(DateTime)
     performance_stats = Column(JSON)
 
@@ -415,14 +415,14 @@ class UnifiedDatabaseManager:
                 # Update existing bot
                 bot.last_seen = datetime.now()
                 bot.config = config
-                bot.active = True
+                bot.is_active = True
             else:
                 # Create new bot
                 bot = BotRegistry(
                     bot_id=bot_id,
                     created_at=datetime.now(),
                     config=config,
-                    active=True,
+                    is_active=True,
                     last_seen=datetime.now()
                 )
                 session.add(bot)
