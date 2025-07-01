@@ -406,24 +406,29 @@ class UnifiedDatabaseManager:
     
     def register_bot(self, bot_id: str, config: Dict[str, Any]):
         """Register a bot in the registry"""
-        with self.session_scope() as session:
-            bot = session.query(BotRegistry).filter(BotRegistry.bot_id == bot_id).first()
-            
-            if bot:
-                # Update existing bot
-                bot.config = config
-                bot.is_active = True
-            else:
-                # Create new bot
-                bot = BotRegistry(
-                    bot_id=bot_id,
-                    created_at=datetime.now(),
-                    config=config,
-                    is_active=True
-                )
-                session.add(bot)
-            
-            self.logger.info(f"Registered bot: {bot_id}")
+        try:
+            with self.session_scope() as session:
+                bot = session.query(BotRegistry).filter(BotRegistry.bot_id == bot_id).first()
+                
+                if bot:
+                    # Update existing bot
+                    bot.config = config
+                    bot.is_active = True
+                else:
+                    # Create new bot
+                    bot = BotRegistry(
+                        bot_id=bot_id,
+                        created_at=datetime.now(),
+                        config=config,
+                        is_active=True
+                    )
+                    session.add(bot)
+                
+                self.logger.info(f"Registered bot: {bot_id}")
+        except Exception as e:
+            # Log the error but don't fail - bot can still run without registry
+            self.logger.warning(f"Failed to register bot {bot_id}: {e}")
+            self.logger.info(f"Bot {bot_id} will continue without registry")
     
     def get_performance_stats(self, bot_id: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
         """Get performance statistics for a bot"""
