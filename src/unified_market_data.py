@@ -35,7 +35,7 @@ class UnifiedMarketData:
         # Alpaca data client
         self.data_client = StockHistoricalDataClient(
             broker.api_key,
-            broker.api_secret,
+            broker.secret_key,
             raw_data=False
         )
         
