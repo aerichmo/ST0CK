@@ -180,8 +180,7 @@ class UnifiedDatabaseManager:
                 pool_recycle=3600,  # Recycle connections after 1 hour
                 pool_pre_ping=True,  # Verify connections before use
                 connect_args={
-                    'connect_timeout': 10,
-                    'options': '-c statement_timeout=30000'  # 30 second statement timeout
+                    'connect_timeout': 10
                 }
             )
             
