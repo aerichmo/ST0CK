@@ -145,7 +145,7 @@ class UnifiedTradingEngine:
         """Initialize all components"""
         try:
             # Connect to broker
-            await self.broker.connect()
+            self.broker.connect()
             
             # Initialize market data
             await self.market_data.initialize()
