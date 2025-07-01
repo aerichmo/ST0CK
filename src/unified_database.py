@@ -83,7 +83,6 @@ class BotRegistry(Base):
     created_at = Column(DateTime, nullable=False)
     config = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
-    performance_stats = Column(JSON)
 
 class BattleLines(Base):
     __tablename__ = 'battle_lines'
