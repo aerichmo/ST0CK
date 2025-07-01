@@ -138,14 +138,8 @@ class ST0CKGStrategy(TradingStrategy):
             return None
         
         # Get quality-adjusted quote if using IEX data
-        quality_quote = None
-        if self.data_quality:
-            quality_quote = await self.data_quality.get_quality_quote('SPY')
-            if quality_quote and quality_quote.get('quality_score', 1.0) < 0.8:
-                self.logger.warning(f"Low quality SPY quote: {quality_quote['quality_score']:.2f}")
-                # Use more conservative approach with low quality data
-                if len(positions) > 0:
-                    return None  # Don't add positions with poor data
+        # Note: For now, we'll skip quality adjustment in sync context
+        # TODO: Make check_entry_conditions async or add sync version of get_quality_quote
         
         # Detect signals
         signals = self.signal_detector.detect_all_signals(

@@ -44,9 +44,32 @@ jobs:
         echo "Git commit:"
         git log --oneline -1
     
-    - name: Run Database Migration
+    - name: Check Database Schema
+      id: check_db
       run: |
-        echo "Running database force fix..."
+        echo "Checking if database migration is needed..."
+        python -c "
+import os, sys
+from sqlalchemy import create_engine, text
+try:
+    engine = create_engine(os.getenv('DATABASE_URL'))
+    with engine.connect() as conn:
+        # Quick test query
+        conn.execute(text('SELECT bot_id, action FROM trades LIMIT 1'))
+    print('Database schema is up to date')
+    sys.exit(0)
+except Exception as e:
+    print(f'Database migration needed: {e}')
+    sys.exit(1)
+        " && echo "DB_OK=true" >> $GITHUB_OUTPUT || echo "DB_OK=false" >> $GITHUB_OUTPUT
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      continue-on-error: true
+    
+    - name: Run Database Migration
+      if: steps.check_db.outputs.DB_OK != 'true'
+      run: |
+        echo "Running database migration..."
         python src/force_fix_database.py || {
           echo "Force fix failed, attempting to recreate tables..."
           echo "yes" | python src/recreate_tables.py
