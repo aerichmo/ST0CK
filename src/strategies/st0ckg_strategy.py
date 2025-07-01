@@ -12,6 +12,7 @@ from ..unified_database import get_latest_battle_lines, save_battle_lines
 from ..st0ckg_signals import ST0CKGSignalDetector
 from ..options_selector import FastOptionsSelector
 from ..trend_filter_native import TrendFilter
+from ..data_quality_manager import DataQualityManager
 
 class ST0CKGStrategy(TradingStrategy):
     """
@@ -53,6 +54,9 @@ class ST0CKGStrategy(TradingStrategy):
         }
         self.options_selector = FastOptionsSelector(options_config, market_data_provider)
         self.trend_filter = TrendFilter()
+        
+        # Data quality manager for IEX feed handling
+        self.data_quality = DataQualityManager(market_data_provider) if market_data_provider else None
         
         # Trading parameters (DO NOT CHANGE - core strategy logic)
         self.start_time = start_time
@@ -132,6 +136,16 @@ class ST0CKGStrategy(TradingStrategy):
         spy_price = market_data.get('spy_price')
         if not spy_price:
             return None
+        
+        # Get quality-adjusted quote if using IEX data
+        quality_quote = None
+        if self.data_quality:
+            quality_quote = await self.data_quality.get_quality_quote('SPY')
+            if quality_quote and quality_quote.get('quality_score', 1.0) < 0.8:
+                self.logger.warning(f"Low quality SPY quote: {quality_quote['quality_score']:.2f}")
+                # Use more conservative approach with low quality data
+                if len(positions) > 0:
+                    return None  # Don't add positions with poor data
         
         # Detect signals
         signals = self.signal_detector.detect_all_signals(
@@ -215,8 +229,16 @@ class ST0CKGStrategy(TradingStrategy):
         """
         contract = signal['option_contract']
         
-        # Use limit order at ask or slightly above for quick fill
-        limit_price = contract['ask'] * 1.02  # 2% above ask
+        # Base limit price
+        base_limit = contract['ask'] * 1.02  # 2% above ask
+        
+        # Apply data quality adjustments if using IEX
+        if self.data_quality:
+            adjustments = self.data_quality.get_execution_adjustments(signal['signal_type'])
+            # Add extra buffer for IEX's wider spreads
+            limit_price = base_limit + adjustments['limit_price_buffer']
+        else:
+            limit_price = base_limit
         
         return {
             'symbol': contract['symbol'],
