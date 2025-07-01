@@ -92,23 +92,69 @@ def migrate_database():
         
         print("✅ bot_id column added successfully")
         
-        # Verify all required columns exist
-        print("\nVerifying trades table structure...")
+        # Add any other missing columns
+        print("\nChecking for other missing columns...")
         inspector = inspect(engine)
         columns = inspector.get_columns('trades')
         column_names = [col['name'] for col in columns]
         
-        required_columns = [
-            'id', 'bot_id', 'symbol', 'action', 'quantity', 
-            'entry_price', 'exit_price', 'entry_time', 'exit_time',
-            'pnl', 'pnl_percent', 'strategy_details'
-        ]
+        # Define all required columns with their types
+        required_columns = {
+            'action': 'VARCHAR' if 'postgresql' in database_url else 'TEXT',
+            'quantity': 'INTEGER',
+            'pnl': 'FLOAT',
+            'pnl_percent': 'FLOAT',
+            'strategy_details': 'JSON' if 'postgresql' in database_url else 'TEXT'
+        }
         
-        missing_columns = [col for col in required_columns if col not in column_names]
+        # Add missing columns
+        with engine.connect() as conn:
+            for col_name, col_type in required_columns.items():
+                if col_name not in column_names:
+                    print(f"Adding column {col_name}...")
+                    try:
+                        if 'postgresql' in database_url:
+                            default_value = 'NULL'
+                            if col_name == 'action':
+                                default_value = "'unknown'"
+                            elif col_name == 'quantity':
+                                default_value = '0'
+                            
+                            conn.execute(text(f"""
+                                ALTER TABLE trades 
+                                ADD COLUMN {col_name} {col_type} DEFAULT {default_value}
+                            """))
+                        else:
+                            # SQLite
+                            default_value = 'NULL'
+                            if col_name == 'action':
+                                default_value = "'unknown'"
+                            elif col_name == 'quantity':
+                                default_value = '0'
+                                
+                            conn.execute(text(f"""
+                                ALTER TABLE trades 
+                                ADD COLUMN {col_name} {col_type} DEFAULT {default_value}
+                            """))
+                        conn.commit()
+                        print(f"✅ Added column {col_name}")
+                    except Exception as e:
+                        print(f"❌ Failed to add column {col_name}: {e}")
         
-        if missing_columns:
-            print(f"❌ Missing columns: {missing_columns}")
-            print("Consider recreating the database with the latest schema")
+        # Final verification
+        print("\nFinal verification...")
+        inspector = inspect(engine)
+        columns = inspector.get_columns('trades')
+        column_names = [col['name'] for col in columns]
+        
+        all_required = ['id', 'bot_id', 'symbol', 'action', 'quantity', 
+                       'entry_price', 'exit_price', 'entry_time', 'exit_time',
+                       'pnl', 'pnl_percent', 'strategy_details']
+        
+        missing = [col for col in all_required if col not in column_names]
+        
+        if missing:
+            print(f"❌ Still missing columns: {missing}")
             return False
         else:
             print("✅ All required columns present")
