@@ -104,6 +104,11 @@ class BotManager:
             if strategy_class == ST0CKGStrategy:
                 strategy.db_manager = engine.db
                 strategy.market_data = engine.market_data
+                # Also update components that need market data
+                strategy.signal_detector.market_data = engine.market_data
+                strategy.options_selector.market_data = engine.market_data
+                if strategy.data_quality:
+                    strategy.data_quality.market_data = engine.market_data
             
             # Initialize engine
             await engine.initialize()
