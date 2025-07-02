@@ -268,6 +268,83 @@ class UnifiedMarketData:
             
         return None
     
+    def find_best_options(self, symbol: str, expiration: str, option_type: str, 
+                         target_delta: float = 0.30) -> Optional[List[Dict[str, Any]]]:
+        """
+        Find best option contracts based on target delta
+        Synchronous wrapper for async get_option_chain
+        """
+        try:
+            # Run async method in sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            contracts = loop.run_until_complete(self.get_option_chain(symbol, expiration, option_type))
+            loop.close()
+            
+            if not contracts:
+                return None
+                
+            # Filter by liquidity and spread
+            viable_contracts = []
+            for contract in contracts:
+                # Skip if no bid/ask
+                if not contract.get('bid') or not contract.get('ask'):
+                    continue
+                    
+                # Skip if spread too wide (> 10% of mid)
+                spread = contract['ask'] - contract['bid']
+                mid = (contract['ask'] + contract['bid']) / 2
+                if spread > mid * 0.10:
+                    continue
+                    
+                viable_contracts.append(contract)
+            
+            return viable_contracts[:5]  # Return top 5 options
+            
+        except Exception as e:
+            self.logger.error(f"Error finding best options: {e}")
+            return None
+    
+    def get_option_chain_snapshot(self, symbol: str, lower_bound: float, upper_bound: float) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get option chain snapshot for a price range
+        Synchronous wrapper for compatibility
+        """
+        try:
+            # Get nearest expiration
+            today = datetime.now(self.eastern).date()
+            friday = today + timedelta(days=(4 - today.weekday()) % 7)
+            if friday == today:
+                friday = today + timedelta(days=7)
+            expiration = friday.strftime('%Y-%m-%d')
+            
+            # Get both calls and puts
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            calls_task = self.get_option_chain(symbol, expiration, 'CALL')
+            puts_task = self.get_option_chain(symbol, expiration, 'PUT')
+            
+            calls, puts = loop.run_until_complete(asyncio.gather(calls_task, puts_task))
+            loop.close()
+            
+            # Filter by strike price range
+            all_options = []
+            
+            if calls:
+                filtered_calls = [c for c in calls if lower_bound <= c.get('strike', 0) <= upper_bound]
+                all_options.extend(filtered_calls)
+                
+            if puts:
+                filtered_puts = [p for p in puts if lower_bound <= p.get('strike', 0) <= upper_bound]
+                all_options.extend(filtered_puts)
+            
+            return all_options
+            
+        except Exception as e:
+            self.logger.error(f"Error getting option chain snapshot: {e}")
+            return None
+    
     async def _update_opening_ranges(self):
         """Update opening range data for key symbols"""
         symbols = ['SPY', 'QQQ', 'IWM', 'VIX']
