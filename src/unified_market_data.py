@@ -347,7 +347,7 @@ class UnifiedMarketData:
     
     async def _update_opening_ranges(self):
         """Update opening range data for key symbols"""
-        symbols = ['SPY', 'QQQ', 'IWM', 'VIX']
+        symbols = ['SPY']  # Only track SPY
         
         try:
             # Get first 30 minutes of data

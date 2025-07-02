@@ -95,21 +95,21 @@ class ST0CKGStrategy(TradingStrategy):
         # Update battle lines if needed
         await self._update_battle_lines()
         
-        # Get market internals
+        # Get market internals (SPY only)
         data = {
             'battle_lines': self.battle_lines,
-            'vix': None,
+            'spy_quote': None,
             'market_breadth': None
         }
         
-        # Get VIX quote
+        # Get fresh SPY quote
         try:
-            vix_quote = await market_data_provider.get_quote('VIX')
-            if vix_quote:
-                data['vix'] = vix_quote['price']
+            spy_quote = await market_data_provider.get_quote('SPY')
+            if spy_quote:
+                data['spy_quote'] = spy_quote
         except Exception as e:
-            self.logger.warning(f"Failed to get VIX quote: {str(e)}", 
-                              extra={"bot_id": self.bot_id, "symbol": "VIX"})
+            self.logger.warning(f"Failed to get SPY quote: {str(e)}", 
+                              extra={"bot_id": self.bot_id, "symbol": "SPY"})
         
         return data
     

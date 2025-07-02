@@ -119,22 +119,24 @@ class MarketAnalysisService:
     
     async def get_market_breadth(self) -> Dict[str, Any]:
         """
-        Calculate market breadth indicators
+        Calculate market breadth indicators (SPY only)
         """
         try:
-            # Get quotes for major indices
-            symbols = ['SPY', 'QQQ', 'IWM', 'DIA']
-            quotes = await self.market_data.get_quotes(symbols)
+            # Get quote for SPY only
+            quote = await self.market_data.get_quote('SPY')
             
-            # Calculate breadth
-            advances = sum(1 for q in quotes.values() if q and q.get('change', 0) > 0)
-            declines = sum(1 for q in quotes.values() if q and q.get('change', 0) < 0)
+            if not quote:
+                return {}
+            
+            # Simple breadth based on SPY movement
+            change = quote.get('change', 0)
+            change_pct = quote.get('change_percent', 0)
             
             breadth = {
-                'advances': advances,
-                'declines': declines,
-                'ratio': advances / declines if declines > 0 else float('inf'),
-                'sentiment': 'bullish' if advances > declines else 'bearish'
+                'spy_change': change,
+                'spy_change_pct': change_pct,
+                'sentiment': 'bullish' if change > 0 else 'bearish' if change < 0 else 'neutral',
+                'strength': 'strong' if abs(change_pct) > 0.5 else 'moderate' if abs(change_pct) > 0.2 else 'weak'
             }
             
             return breadth

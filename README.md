@@ -4,8 +4,9 @@ High-performance automated trading platform for stocks and options using Alpaca 
 
 ## 🚀 Active Strategy: ST0CKG
 
-### ✅ ST0CKG - Advanced Pattern Recognition
+### ✅ ST0CKG - Advanced Pattern Recognition (SPY Only)
 - **Strategy**: Multi-signal pattern recognition with 6 entry types
+- **Instrument**: SPY options only (0-DTE)
 - **Sessions**: 
   - Morning: 9:30-11:00 AM ET (40-45 delta options)
   - Midday: 1:00-2:30 PM ET (30-35 delta options)

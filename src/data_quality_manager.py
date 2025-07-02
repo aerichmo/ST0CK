@@ -25,8 +25,6 @@ class DataQualityManager:
         # Thresholds
         self.max_reasonable_spread = {
             'SPY': 0.05,    # 5 cents max for SPY
-            'QQQ': 0.05,    # 5 cents max for QQQ
-            'IWM': 0.10,    # 10 cents for IWM
             'default': 0.20  # 20 cents for others
         }
     
@@ -85,9 +83,9 @@ class DataQualityManager:
     
     async def get_aggregated_market_view(self) -> Dict[str, float]:
         """
-        Get market overview using multiple symbols to compensate for IEX limitations
+        Get market overview using SPY to compensate for IEX limitations
         """
-        symbols = ['SPY', 'QQQ', 'IWM', 'DIA']
+        symbols = ['SPY']  # Only track SPY
         quotes = {}
         
         for symbol in symbols:
@@ -116,9 +114,7 @@ class DataQualityManager:
         
         # Adjust for symbol liquidity
         liquidity_multiplier = {
-            'SPY': 1.0,
-            'QQQ': 1.1,
-            'IWM': 1.3
+            'SPY': 1.0
         }.get(symbol, 1.5)
         
         estimated_slippage = order_size * 100 * base_slippage * liquidity_multiplier
