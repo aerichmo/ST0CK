@@ -121,6 +121,10 @@ class ST0CKGStrategy(TradingStrategy):
         
         # Check trading window
         if not self._in_trading_window(now):
+            # Log once per minute when outside window
+            if not hasattr(self, '_last_window_log') or (now - self._last_window_log).seconds > 60:
+                self.logger.info(f"Outside trading window. Current: {now.strftime('%H:%M')}, Windows: {self.start_time}-{self.end_time}")
+                self._last_window_log = now
             return None
         
         # Check position limit
@@ -150,6 +154,10 @@ class ST0CKGStrategy(TradingStrategy):
         )
         
         if not signals:
+            # Log periodically when no signals
+            if not hasattr(self, '_last_no_signal_log') or (now - self._last_no_signal_log).seconds > 300:
+                self.logger.info(f"No signals detected. SPY: ${spy_price:.2f}, Time: {now.strftime('%H:%M')}")
+                self._last_no_signal_log = now
             return None
         
         # Get the highest scoring signal
