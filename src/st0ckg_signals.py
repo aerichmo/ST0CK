@@ -95,17 +95,15 @@ class ST0CKGSignalDetector:
                     pass
                 
             if options and len(options) > 0:
-                    # Quick gamma calculation without complex loops
-                    gamma_concentration = False
-                    for opt in options[:10]:  # Limit to first 10 for speed
-                        if opt.get('strike') and abs(current_price - opt['strike']) < 1.0:
-                            if opt.get('open_interest', 0) > 1000:
-                                gamma_concentration = True
-                                score += 4.0
-                                details.append(f"High OI near ${opt['strike']}")
-                                break
-            except:
-                pass  # Continue without option data
+                # Quick gamma calculation without complex loops
+                gamma_concentration = False
+                for opt in options[:10]:  # Limit to first 10 for speed
+                    if opt.get('strike') and abs(current_price - opt['strike']) < 1.0:
+                        if opt.get('open_interest', 0) > 1000:
+                            gamma_concentration = True
+                            score += 4.0
+                            details.append(f"High OI near ${opt['strike']}")
+                            break
             
             # Price acceleration check (simpler)
             recent_bars = context.get('recent_bars', [])
