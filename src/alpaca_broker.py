@@ -466,6 +466,15 @@ class AlpacaBroker(BrokerInterface):
         """Get all open orders"""
         return self.get_orders(status='open')
     
+    def get_option_contracts(self, symbol: str, expiration: datetime, option_type: str) -> Optional[List[Dict]]:
+        """
+        Get option contracts for a symbol and expiration
+        Note: This is a stub implementation - Alpaca options trading requires additional setup
+        """
+        logger.warning(f"Option contracts not implemented for Alpaca broker - requested {symbol} {option_type} options")
+        # Return empty list to prevent errors
+        return []
+    
     def get_option_chain(self, underlying: str, expiration: Optional[str] = None) -> Optional[Dict]:
         """Get option chain for underlying - not implemented for Alpaca"""
         logger.warning("Option chain not implemented for Alpaca broker")
