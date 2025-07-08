@@ -495,7 +495,7 @@ class UnifiedTradingEngine:
             # Close connections
             self.db.close()
             self.cache.close()
-            await self.broker.disconnect()
+            self.broker.disconnect()
             
             self.logger.info(f"[{self.bot_id}] Engine shutdown complete")
             
