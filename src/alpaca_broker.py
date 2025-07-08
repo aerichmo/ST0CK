@@ -16,10 +16,18 @@ from alpaca.trading.requests import (
     StopOrderRequest,
     GetOrdersRequest
 )
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, AssetStatus
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest, StockQuotesRequest
+from alpaca.data.historical.option import OptionHistoricalDataClient
+from alpaca.data.requests import (
+    StockBarsRequest, 
+    StockQuotesRequest,
+    OptionChainRequest,
+    OptionLatestQuoteRequest,
+    GetOptionContractsRequest
+)
 from alpaca.data.timeframe import TimeFrame
+from alpaca.trading.enums import ContractType
 
 from .broker_interface import BrokerInterface
 
@@ -66,6 +74,12 @@ class AlpacaBroker(BrokerInterface):
             
             # Initialize data client (no auth required for basic data)
             self.data_client = StockHistoricalDataClient(
+                api_key=self.api_key,
+                secret_key=self.secret_key
+            )
+            
+            # Initialize options data client
+            self.option_client = OptionHistoricalDataClient(
                 api_key=self.api_key,
                 secret_key=self.secret_key
             )
@@ -468,12 +482,45 @@ class AlpacaBroker(BrokerInterface):
     
     def get_option_contracts(self, symbol: str, expiration: datetime, option_type: str) -> Optional[List[Dict]]:
         """
-        Get option contracts for a symbol and expiration
-        Note: This is a stub implementation - Alpaca options trading requires additional setup
+        Get option contracts for a symbol and expiration using Alpaca options API
         """
-        logger.warning(f"Option contracts not implemented for Alpaca broker - requested {symbol} {option_type} options")
-        # Return empty list to prevent errors
-        return []
+        if not self.connected:
+            return None
+            
+        try:
+            # Determine contract type
+            contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
+            
+            # Create request for option contracts
+            req = GetOptionContractsRequest(
+                underlying_symbol=[symbol],
+                status=AssetStatus.ACTIVE,
+                expiration_date=expiration.strftime('%Y-%m-%d'),
+                type=contract_type
+            )
+            
+            # Get contracts from Alpaca
+            contracts_response = self.option_client.get_option_contracts(req)
+            
+            # Convert to our standard format
+            result = []
+            for contract in contracts_response:
+                result.append({
+                    'symbol': contract.symbol,  # OCC format symbol
+                    'strike': float(contract.strike_price),
+                    'expiration': contract.expiration,
+                    'type': 'CALL' if contract.contract_type == ContractType.CALL else 'PUT',
+                    'underlying': contract.underlying_symbol,
+                    'contract_size': contract.size,
+                    'style': contract.style  # American or European
+                })
+            
+            logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get option contracts: {e}")
+            return None
     
     def get_option_chain(self, underlying: str, expiration: Optional[str] = None) -> Optional[Dict]:
         """Get option chain for underlying - not implemented for Alpaca"""

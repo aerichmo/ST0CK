@@ -214,17 +214,22 @@ class UnifiedMarketData:
                 if contracts:
                     # Get quotes for all contracts concurrently
                     contract_symbols = [c['symbol'] for c in contracts]
-                    quotes = await self.get_quotes(contract_symbols)
+                    quotes = await self.get_option_quotes(contract_symbols)
                     
                     # Merge contract and quote data
                     for contract in contracts:
                         if contract['symbol'] in quotes:
                             quote = quotes[contract['symbol']]
                             contract.update({
-                                'bid': quote['bid'],
-                                'ask': quote['ask'],
-                                'mid': (quote['bid'] + quote['ask']) / 2,
-                                'spread': quote['ask'] - quote['bid']
+                                'bid': quote.get('bid', 0),
+                                'ask': quote.get('ask', 0),
+                                'mid': (quote.get('bid', 0) + quote.get('ask', 0)) / 2 if quote.get('bid') and quote.get('ask') else 0,
+                                'spread': quote.get('ask', 0) - quote.get('bid', 0) if quote.get('bid') and quote.get('ask') else 0,
+                                'volume': quote.get('volume', 0),
+                                'open_interest': quote.get('open_interest', 0),
+                                'iv': quote.get('iv', 0.25),  # Default IV if not provided
+                                'delta': quote.get('delta', 0.5),  # Default delta
+                                'underlying_price': quote.get('underlying_price', 0)
                             })
                     
                     # Cache the result
@@ -236,6 +241,36 @@ class UnifiedMarketData:
             self.logger.error(f"Failed to get option chain for {symbol}: {e}")
             
         return None
+    
+    async def get_option_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get quotes for multiple option contracts
+        
+        Returns:
+            Dict mapping symbol to quote data
+        """
+        quotes = {}
+        
+        try:
+            # Get quotes concurrently for all symbols
+            tasks = []
+            for symbol in symbols:
+                task = asyncio.to_thread(self.broker.get_option_quote, symbol)
+                tasks.append(task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for symbol, result in zip(symbols, results):
+                if isinstance(result, dict) and result:
+                    quotes[symbol] = result
+                elif isinstance(result, Exception):
+                    self.logger.warning(f"Failed to get quote for {symbol}: {result}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error getting option quotes: {e}")
+            
+        return quotes
     
     async def get_option_snapshot(self, option_symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -307,6 +342,11 @@ class UnifiedMarketData:
                 mid = (contract['ask'] + contract['bid']) / 2
                 if spread > mid * 0.10:
                     continue
+                
+                # Add calculated fields for scoring
+                contract['delta_diff'] = abs(contract.get('delta', 0.5) - target_delta)
+                contract['oi'] = contract.get('open_interest', 0)
+                contract['contract_symbol'] = contract['symbol']  # Alias for compatibility
                     
                 viable_contracts.append(contract)
             
@@ -378,6 +418,11 @@ class UnifiedMarketData:
                 mid = (contract['ask'] + contract['bid']) / 2
                 if spread > mid * 0.10:
                     continue
+                
+                # Add calculated fields for scoring
+                contract['delta_diff'] = abs(contract.get('delta', 0.5) - target_delta)
+                contract['oi'] = contract.get('open_interest', 0)
+                contract['contract_symbol'] = contract['symbol']  # Alias for compatibility
                     
                 viable_contracts.append(contract)
             
