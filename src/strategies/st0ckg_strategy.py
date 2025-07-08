@@ -109,7 +109,7 @@ class ST0CKGStrategy(TradingStrategy):
                 data['spy_quote'] = spy_quote
         except Exception as e:
             self.logger.warning(f"Failed to get SPY quote: {str(e)}", 
-                              extra={"bot_id": self.bot_id, "symbol": "SPY"})
+                              extra={"symbol": "SPY"})
         
         return data
     
@@ -134,7 +134,7 @@ class ST0CKGStrategy(TradingStrategy):
         # Check battle lines
         if not self.battle_lines:
             self.logger.warning("No battle lines available", 
-                              extra={"bot_id": self.bot_id, "symbol": "SPY"})
+                              extra={"symbol": "SPY"})
             return None
         
         spy_price = market_data.get('spy_price')
@@ -185,7 +185,7 @@ class ST0CKGStrategy(TradingStrategy):
         
         if not contract:
             self.logger.warning(f"No suitable option contract for {signal_type}", 
-                              extra={"bot_id": self.bot_id, "signal_type": signal_type, "current_price": spy_price})
+                              extra={"signal_type": signal_type, "current_price": spy_price})
             return None
         
         # Update last signal time
@@ -374,7 +374,7 @@ class ST0CKGStrategy(TradingStrategy):
             
         except Exception as e:
             self.logger.error(f"Failed to calculate battle lines: {str(e)}", 
-                            extra={"bot_id": self.bot_id, "symbol": "SPY", "error_type": type(e).__name__})
+                            extra={"symbol": "SPY", "error_type": type(e).__name__})
             return None
     
     def _in_trading_window(self, now: datetime) -> bool:

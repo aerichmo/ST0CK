@@ -78,7 +78,7 @@ class UnifiedMarketData:
         try:
             async with self.rate_limiter:
                 # Use asyncio.to_thread for sync API calls
-                request = StockQuotesRequest(symbol_or_symbols=symbol)
+                request = StockQuotesRequest(symbol_or_symbols=symbol, feed="iex")
                 quotes = await asyncio.to_thread(
                     self.data_client.get_stock_latest_quote,
                     request
@@ -146,7 +146,8 @@ class UnifiedMarketData:
                     symbol_or_symbols=symbol,
                     timeframe=timeframe,
                     start=start,
-                    end=now
+                    end=now,
+                    feed="iex"
                 )
                 
                 bars_data = await asyncio.to_thread(
@@ -275,11 +276,21 @@ class UnifiedMarketData:
         Synchronous wrapper for async get_option_chain
         """
         try:
-            # Run async method in sync context
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            contracts = loop.run_until_complete(self.get_option_chain(symbol, expiration, option_type))
-            loop.close()
+            # Convert expiration string to datetime
+            exp_date = datetime.strptime(expiration, '%Y-%m-%d')
+            
+            # Check if we're already in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, can't use run_until_complete
+                self.logger.warning("find_best_options called from async context, returning None")
+                return None
+            except RuntimeError:
+                # No event loop running, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                contracts = loop.run_until_complete(self.get_option_chain(symbol, exp_date, option_type))
+                loop.close()
             
             if not contracts:
                 return None
@@ -316,17 +327,24 @@ class UnifiedMarketData:
             friday = today + timedelta(days=(4 - today.weekday()) % 7)
             if friday == today:
                 friday = today + timedelta(days=7)
-            expiration = friday.strftime('%Y-%m-%d')
+            expiration = datetime.combine(friday, datetime.min.time())
             
-            # Get both calls and puts
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            calls_task = self.get_option_chain(symbol, expiration, 'CALL')
-            puts_task = self.get_option_chain(symbol, expiration, 'PUT')
-            
-            calls, puts = loop.run_until_complete(asyncio.gather(calls_task, puts_task))
-            loop.close()
+            # Check if we're already in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, can't use run_until_complete
+                self.logger.warning("get_option_chain_snapshot called from async context, returning None")
+                return None
+            except RuntimeError:
+                # No event loop running, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                calls_task = self.get_option_chain(symbol, expiration, 'CALL')
+                puts_task = self.get_option_chain(symbol, expiration, 'PUT')
+                
+                calls, puts = loop.run_until_complete(asyncio.gather(calls_task, puts_task))
+                loop.close()
             
             # Filter by strike price range
             all_options = []
