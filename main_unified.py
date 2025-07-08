@@ -190,6 +190,7 @@ Examples:
     # Configure logging
     configure_logging(
         log_level=args.log_level,
+        log_to_file=True,  # Ensure file logging is enabled
         sentry_dsn=None if args.no_sentry else os.getenv('SENTRY_DSN')
     )
     

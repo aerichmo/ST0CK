@@ -163,6 +163,9 @@ def configure_logging(
     
     # Add file handler if requested
     if log_to_file:
+        # Ensure logs directory exists
+        os.makedirs('logs', exist_ok=True)
+        
         if bot_id:
             log_file = f'logs/{bot_id}_{os.getpid()}.log'
         else:
