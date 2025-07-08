@@ -9,9 +9,21 @@ import os
 import argparse
 import asyncio
 from datetime import datetime
-from dotenv import load_dotenv
 from typing import Dict, Any, List
 import signal
+
+# Create logs directory immediately
+os.makedirs('logs', exist_ok=True)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError as e:
+    with open('logs/import_error.log', 'w') as f:
+        f.write(f"Failed to import dotenv: {e}\n")
+        f.write("Run: pip install python-dotenv\n")
+    print(f"IMPORT ERROR: {e}")
+    sys.exit(1)
 
 # Bot version
 VERSION = "2.0.0"
@@ -19,13 +31,22 @@ VERSION = "2.0.0"
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.unified_logging import configure_logging, get_logger
-from src.unified_database import UnifiedDatabaseManager
-from src.unified_engine import UnifiedTradingEngine
-from src.strategies import ST0CKAStrategy, ST0CKGStrategy
-from src.error_reporter import ErrorReporter
-
-load_dotenv()
+try:
+    from src.unified_logging import configure_logging, get_logger
+    from src.unified_database import UnifiedDatabaseManager
+    from src.unified_engine import UnifiedTradingEngine
+    from src.strategies import ST0CKAStrategy, ST0CKGStrategy
+    from src.error_reporter import ErrorReporter
+except ImportError as e:
+    with open('logs/import_error.log', 'w') as f:
+        f.write(f"Failed to import ST0CK modules: {e}\n")
+        f.write(f"Working directory: {os.getcwd()}\n")
+        f.write(f"Python path: {sys.path}\n")
+        import traceback
+        f.write(f"Traceback:\n{traceback.format_exc()}\n")
+    print(f"IMPORT ERROR: {e}")
+    print("See logs/import_error.log for details")
+    sys.exit(1)
 
 # Bot Registry - Maps bot names to strategies
 BOT_REGISTRY = {
@@ -158,6 +179,9 @@ class BotManager:
 
 async def main():
     """Main entry point"""
+    # Create logs directory first thing
+    os.makedirs('logs', exist_ok=True)
+    
     parser = argparse.ArgumentParser(
         description='ST0CK Unified Trading System',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -242,4 +266,16 @@ Examples:
         await manager.shutdown()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        # Emergency logging in case of startup failure
+        import traceback
+        os.makedirs('logs', exist_ok=True)
+        with open('logs/startup_error.log', 'w') as f:
+            f.write(f"Startup error at {datetime.now()}:\n")
+            f.write(f"Error: {str(e)}\n")
+            f.write(f"Traceback:\n{traceback.format_exc()}\n")
+        print(f"FATAL ERROR: {str(e)}")
+        print("See logs/startup_error.log for details")
+        sys.exit(1)
