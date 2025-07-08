@@ -14,20 +14,20 @@ from alpaca.trading.requests import (
     MarketOrderRequest, 
     LimitOrderRequest,
     StopOrderRequest,
-    GetOrdersRequest
+    GetOrdersRequest,
+    GetOptionContractsRequest  # Moved from data.requests
 )
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, AssetStatus
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, AssetStatus, ContractType
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.historical.option import OptionHistoricalDataClient
 from alpaca.data.requests import (
     StockBarsRequest, 
     StockQuotesRequest,
     OptionChainRequest,
-    OptionLatestQuoteRequest,
-    GetOptionContractsRequest
+    OptionLatestQuoteRequest
 )
+from alpaca.trading.requests import GetOptionContractsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.enums import ContractType
 
 from .broker_interface import BrokerInterface
 
@@ -499,8 +499,8 @@ class AlpacaBroker(BrokerInterface):
                 type=contract_type
             )
             
-            # Get contracts from Alpaca
-            contracts_response = self.option_client.get_option_contracts(req)
+            # Get contracts from Alpaca using TradingClient
+            contracts_response = self.trading_client.get_option_contracts(req)
             
             # Convert to our standard format
             result = []
