@@ -488,6 +488,12 @@ class AlpacaBroker(BrokerInterface):
             return None
             
         try:
+            # For now, return empty list since Alpaca options API seems to have issues
+            # This will prevent the bot from crashing while we investigate
+            logger.warning(f"Option contracts API temporarily disabled for {symbol} {expiration} {option_type}")
+            return []
+            
+            # TODO: Fix this when Alpaca options API is properly documented
             # Determine contract type
             contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
             
@@ -502,24 +508,54 @@ class AlpacaBroker(BrokerInterface):
             # Get contracts from Alpaca using TradingClient
             contracts_response = self.trading_client.get_option_contracts(req)
             
+            # Debug log the response type
+            logger.debug(f"Option contracts response type: {type(contracts_response)}")
+            if hasattr(contracts_response, '__dict__'):
+                logger.debug(f"Response attributes: {contracts_response.__dict__.keys()}")
+            
             # Convert to our standard format
             result = []
-            for contract in contracts_response:
-                result.append({
-                    'symbol': contract.symbol,  # OCC format symbol
-                    'strike': float(contract.strike_price),
-                    'expiration': contract.expiration,
-                    'type': 'CALL' if contract.contract_type == ContractType.CALL else 'PUT',
-                    'underlying': contract.underlying_symbol,
-                    'contract_size': contract.size,
-                    'style': contract.style  # American or European
-                })
+            # Check if response is a dict with contracts key
+            if hasattr(contracts_response, 'option_contracts'):
+                contracts_list = contracts_response.option_contracts
+            elif isinstance(contracts_response, dict) and 'option_contracts' in contracts_response:
+                contracts_list = contracts_response['option_contracts']
+            elif isinstance(contracts_response, list):
+                contracts_list = contracts_response
+            else:
+                # Try to iterate directly
+                contracts_list = contracts_response
+                
+            for contract in contracts_list:
+                # Handle both object and dict access patterns
+                if hasattr(contract, 'symbol'):
+                    result.append({
+                        'symbol': contract.symbol,  # OCC format symbol
+                        'strike': float(contract.strike_price),
+                        'expiration': contract.expiration,
+                        'type': 'CALL' if contract.contract_type == ContractType.CALL else 'PUT',
+                        'underlying': contract.underlying_symbol,
+                        'contract_size': contract.size if hasattr(contract, 'size') else 100,
+                        'style': contract.style if hasattr(contract, 'style') else 'American'
+                    })
+                elif isinstance(contract, dict):
+                    result.append({
+                        'symbol': contract.get('symbol'),  # OCC format symbol
+                        'strike': float(contract.get('strike_price', 0)),
+                        'expiration': contract.get('expiration'),
+                        'type': 'CALL' if contract.get('contract_type') == 'call' else 'PUT',
+                        'underlying': contract.get('underlying_symbol', symbol),
+                        'contract_size': contract.get('size', 100),
+                        'style': contract.get('style', 'American')
+                    })
+                else:
+                    logger.warning(f"Unexpected contract format: {type(contract)}")
             
             logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
             return result
             
         except Exception as e:
-            logger.error(f"Failed to get option contracts: {e}")
+            logger.error(f"Failed to get option contracts: {e}", exc_info=True)
             return None
     
     def get_option_chain(self, underlying: str, expiration: Optional[str] = None) -> Optional[Dict]:
