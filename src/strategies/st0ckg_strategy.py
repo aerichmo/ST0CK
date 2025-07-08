@@ -99,7 +99,8 @@ class ST0CKGStrategy(TradingStrategy):
         data = {
             'battle_lines': self.battle_lines,
             'spy_quote': None,
-            'market_breadth': None
+            'market_breadth': None,
+            'option_chains': {}  # Pre-fetch option chains
         }
         
         # Get fresh SPY quote
@@ -107,6 +108,36 @@ class ST0CKGStrategy(TradingStrategy):
             spy_quote = await market_data_provider.get_quote('SPY')
             if spy_quote:
                 data['spy_quote'] = spy_quote
+                
+                # Pre-fetch option chains for common price ranges
+                price = spy_quote['price']
+                
+                # Get option chain snapshot for current price range
+                lower_bound = price - 5
+                upper_bound = price + 5
+                
+                option_snapshot = await market_data_provider.get_option_chain_snapshot_async(
+                    'SPY', lower_bound, upper_bound
+                )
+                
+                if option_snapshot:
+                    data['option_chains']['snapshot'] = option_snapshot
+                    
+                # Also pre-fetch weekly options
+                expiry = self._get_weekly_expiry_date()
+                expiry_str = expiry.strftime('%Y-%m-%d')
+                
+                target_delta = 0.30  # Default target delta
+                calls = await market_data_provider.find_best_options_async(
+                    'SPY', expiry_str, 'CALL', target_delta
+                )
+                puts = await market_data_provider.find_best_options_async(
+                    'SPY', expiry_str, 'PUT', target_delta
+                )
+                
+                data['option_chains']['calls'] = calls or []
+                data['option_chains']['puts'] = puts or []
+                
         except Exception as e:
             self.logger.warning(f"Failed to get SPY quote: {str(e)}", 
                               extra={"symbol": "SPY"})
@@ -144,6 +175,10 @@ class ST0CKGStrategy(TradingStrategy):
         # Get quality-adjusted quote if using IEX data
         # Note: For now, we'll skip quality adjustment in sync context
         # TODO: Make check_entry_conditions async or add sync version of get_quality_quote
+        
+        # Set pre-fetched options if available
+        if 'option_chains' in market_data:
+            self.options_selector.set_prefetched_options(market_data['option_chains'])
         
         # Detect signals
         signals = self.signal_detector.detect_all_signals(
@@ -376,6 +411,22 @@ class ST0CKGStrategy(TradingStrategy):
             self.logger.error(f"Failed to calculate battle lines: {str(e)}", 
                             extra={"symbol": "SPY", "error_type": type(e).__name__})
             return None
+    
+    def _get_weekly_expiry_date(self) -> datetime:
+        """Get next weekly expiry date for SPY options"""
+        today = datetime.now(self.eastern)
+        days_until_friday = (4 - today.weekday()) % 7
+        
+        # If it's Friday after market close, use next Friday
+        if days_until_friday == 0 and today.hour >= 16:
+            days_until_friday = 7
+        
+        # If less than 2 days to expiry, use next week
+        if days_until_friday < 2:
+            days_until_friday += 7
+        
+        expiry = today + timedelta(days=days_until_friday)
+        return expiry.replace(hour=16, minute=0, second=0, microsecond=0)
     
     def _in_trading_window(self, now: datetime) -> bool:
         """Check if within trading window"""

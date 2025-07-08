@@ -23,6 +23,7 @@ class ST0CKGSignalDetector:
             'OPTIONS_PIN': 6.0,
             'DARK_POOL_FLOW': 5.5
         }
+        self._prefetched_option_chains = None
     
     def detect_all_signals(self, symbol: str, current_price: float, 
                           battle_lines: Dict[str, float], 
@@ -31,6 +32,10 @@ class ST0CKGSignalDetector:
         Detect all signal types and return scores
         Returns dict of signal_type -> {score, details, confidence}
         """
+        # Use pre-fetched option chains if available
+        if 'option_chains' in market_context and 'snapshot' in market_context['option_chains']:
+            self._prefetched_option_chains = market_context['option_chains']['snapshot']
+        
         signals = {}
         
         # 1. Gamma Squeeze Detection
@@ -75,15 +80,21 @@ class ST0CKGSignalDetector:
             score = 0.0
             details = []
             
-            # Skip option chain check if it might fail
-            try:
-                options = self.market_data.get_option_chain_snapshot(
-                    symbol, 
-                    current_price - 5, 
-                    current_price + 5
-                )
+            # Use pre-fetched options if available
+            options = self._prefetched_option_chains
+            
+            if not options:
+                # Skip option chain check if it might fail
+                try:
+                    options = self.market_data.get_option_chain_snapshot(
+                        symbol, 
+                        current_price - 5, 
+                        current_price + 5
+                    )
+                except:
+                    pass
                 
-                if options and len(options) > 0:
+            if options and len(options) > 0:
                     # Quick gamma calculation without complex loops
                     gamma_concentration = False
                     for opt in options[:10]:  # Limit to first 10 for speed
@@ -311,12 +322,19 @@ class ST0CKGSignalDetector:
             score = 0.0
             details = []
             
-            # Get nearby strikes with high OI
-            options = self.market_data.get_option_chain_snapshot(
-                symbol,
-                current_price - 3,
-                current_price + 3
-            )
+            # Use pre-fetched options if available
+            options = self._prefetched_option_chains
+            
+            if not options:
+                # Get nearby strikes with high OI
+                try:
+                    options = self.market_data.get_option_chain_snapshot(
+                        symbol,
+                        current_price - 3,
+                        current_price + 3
+                    )
+                except:
+                    pass
             
             if not options:
                 return {'score': 0, 'details': 'No option data', 'confidence': 'LOW'}
