@@ -80,6 +80,7 @@ class BotRegistry(Base):
     __tablename__ = 'bot_registry'
     
     bot_id = Column(String, primary_key=True)
+    bot_name = Column(String, nullable=True)  # Added for compatibility
     created_at = Column(DateTime, nullable=False)
     config = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -414,10 +415,12 @@ class UnifiedDatabaseManager:
                     # Update existing bot
                     bot.config = config
                     bot.is_active = True
+                    bot.bot_name = bot_id  # Set bot_name to bot_id
                 else:
                     # Create new bot
                     bot = BotRegistry(
                         bot_id=bot_id,
+                        bot_name=bot_id,  # Set bot_name to bot_id
                         created_at=datetime.now(),
                         config=config,
                         is_active=True
