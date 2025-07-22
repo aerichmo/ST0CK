@@ -292,7 +292,7 @@ class UnifiedTradingEngine:
         try:
             # Get account value for position sizing
             account = await self.broker.get_account()
-            account_value = float(account.equity)
+            account_value = float(account['equity'])
             
             # Get position size from strategy
             position_size = self.strategy.get_position_size(signal, account_value)
