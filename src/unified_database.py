@@ -81,6 +81,7 @@ class BotRegistry(Base):
     
     bot_id = Column(String, primary_key=True)
     bot_name = Column(String, nullable=True)  # Added for compatibility
+    strategy_type = Column(String, nullable=True)  # Added for compatibility
     created_at = Column(DateTime, nullable=False)
     config = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -416,11 +417,13 @@ class UnifiedDatabaseManager:
                     bot.config = config
                     bot.is_active = True
                     bot.bot_name = bot_id  # Set bot_name to bot_id
+                    bot.strategy_type = config.get('strategy', bot_id)  # Set strategy_type
                 else:
                     # Create new bot
                     bot = BotRegistry(
                         bot_id=bot_id,
                         bot_name=bot_id,  # Set bot_name to bot_id
+                        strategy_type=config.get('strategy', bot_id),  # Set strategy_type
                         created_at=datetime.now(),
                         config=config,
                         is_active=True

@@ -130,6 +130,10 @@ class AlpacaBroker(BrokerInterface):
             logger.error(f"Failed to get account info: {e}")
             return None
     
+    async def get_account(self) -> Optional[Dict]:
+        """Async wrapper for get_account_info for compatibility"""
+        return self.get_account_info()
+    
     def place_option_order(self, contract: Dict, quantity: int, 
                           order_type: str = 'MARKET') -> Optional[str]:
         """
