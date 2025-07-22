@@ -569,11 +569,31 @@ class AlpacaBroker(BrokerInterface):
                     # Use expiration_date attribute (correct for Alpaca SDK)
                     expiration_date = contract.expiration_date if hasattr(contract, 'expiration_date') else None
                     
+                    # Try different possible attribute names for contract type
+                    contract_type_val = None
+                    for attr_name in ['type', 'option_type', 'contract_type', 'side']:
+                        if hasattr(contract, attr_name):
+                            contract_type_val = getattr(contract, attr_name)
+                            break
+                    
+                    # Convert to string representation
+                    if contract_type_val:
+                        if hasattr(contract_type_val, 'value'):
+                            type_str = contract_type_val.value  # For enum types
+                        elif isinstance(contract_type_val, str):
+                            type_str = contract_type_val.upper()
+                        else:
+                            type_str = str(contract_type_val).upper()
+                    else:
+                        # Try to extract from symbol (SPY251219C00590000 format)
+                        symbol_str = contract.symbol
+                        type_str = 'CALL' if 'C' in symbol_str[-9:] else 'PUT'
+                    
                     result.append({
                         'symbol': contract.symbol,  # OCC format symbol
                         'strike': float(contract.strike_price),
                         'expiration': expiration_date,
-                        'type': 'CALL' if contract.contract_type == ContractType.CALL else 'PUT',
+                        'type': type_str,
                         'underlying': contract.underlying_symbol,
                         'contract_size': contract.size if hasattr(contract, 'size') else 100,
                         'style': contract.style if hasattr(contract, 'style') else 'American'
