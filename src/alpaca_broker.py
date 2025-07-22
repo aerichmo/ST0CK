@@ -551,8 +551,15 @@ class AlpacaBroker(BrokerInterface):
                 type=contract_type
             )
             
+            # Debug: log the exact request being sent
+            logger.info(f"GetOptionContractsRequest: underlying_symbol={req.underlying_symbol}, "
+                       f"expiration_date={req.expiration_date}, type={req.type}, status={req.status}")
+            
             # Get contracts from Alpaca using TradingClient
             contracts_response = self.trading_client.get_option_contracts(req)
+            
+            # Debug log the response
+            logger.info(f"Option contracts response: found {len(list(contracts_response)) if hasattr(contracts_response, '__iter__') else 'unknown'} contracts")
             
             # Debug log the response type
             logger.debug(f"Option contracts response type: {type(contracts_response)}")
