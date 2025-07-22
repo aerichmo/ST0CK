@@ -33,6 +33,16 @@ from .broker_interface import BrokerInterface
 
 logger = logging.getLogger(__name__)
 
+class OrderResult:
+    """Simple order result wrapper for compatibility"""
+    def __init__(self, order_dict: Dict):
+        self.id = order_dict['id']
+        self.symbol = order_dict['symbol']
+        self.qty = order_dict['qty']
+        self.side = order_dict['side']
+        self.order_type = order_dict['order_type']
+        self.status = order_dict['status']
+
 
 class AlpacaBroker(BrokerInterface):
     """Direct Alpaca broker for high-speed options trading"""
@@ -133,6 +143,32 @@ class AlpacaBroker(BrokerInterface):
     async def get_account(self) -> Optional[Dict]:
         """Async wrapper for get_account_info for compatibility"""
         return self.get_account_info()
+    
+    async def place_order(self, symbol: str, qty: int, side: str, 
+                         order_type: str = 'market', time_in_force: str = 'day',
+                         limit_price: Optional[float] = None, 
+                         stop_price: Optional[float] = None) -> Optional[Dict]:
+        """Async wrapper for place_stock_order for compatibility"""
+        order_id = self.place_stock_order(
+            symbol=symbol,
+            quantity=qty,
+            side=side,
+            order_type=order_type,
+            limit_price=limit_price,
+            time_in_force=time_in_force
+        )
+        
+        if order_id:
+            # Return an OrderResult object
+            return OrderResult({
+                'id': order_id,
+                'symbol': symbol,
+                'qty': qty,
+                'side': side,
+                'order_type': order_type,
+                'status': 'pending'
+            })
+        return None
     
     def place_option_order(self, contract: Dict, quantity: int, 
                           order_type: str = 'MARKET') -> Optional[str]:
