@@ -46,7 +46,7 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         mkdir -p logs
-        python main_multi.py st0cka
+        python main_unified.py st0cka
     
     - name: Upload logs
       if: always()

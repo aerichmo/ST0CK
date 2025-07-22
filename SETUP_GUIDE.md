@@ -145,7 +145,7 @@ Always test with paper trading first:
 
 ```bash
 export ALPACA_BASE_URL=https://paper-api.alpaca.markets
-python main_multi.py st0ckg
+python main_unified.py st0ckg
 ```
 
 ### 2. Verify Connection
