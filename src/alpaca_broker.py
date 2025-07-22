@@ -528,12 +528,6 @@ class AlpacaBroker(BrokerInterface):
             return None
             
         try:
-            # For now, return empty list since Alpaca options API seems to have issues
-            # This will prevent the bot from crashing while we investigate
-            logger.warning(f"Option contracts API temporarily disabled for {symbol} {expiration} {option_type}")
-            return []
-            
-            # TODO: Fix this when Alpaca options API is properly documented
             # Determine contract type
             contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
             

@@ -84,15 +84,9 @@ class ST0CKGSignalDetector:
             options = self._prefetched_option_chains
             
             if not options:
-                # Skip option chain check if it might fail
-                try:
-                    options = self.market_data.get_option_chain_snapshot(
-                        symbol, 
-                        current_price - 5, 
-                        current_price + 5
-                    )
-                except:
-                    pass
+                # Skip option chain check in async context
+                # Options should be pre-fetched by the strategy
+                logger.debug("No pre-fetched option chains available for gamma squeeze detection")
                 
             if options and len(options) > 0:
                 # Quick gamma calculation without complex loops
@@ -324,15 +318,9 @@ class ST0CKGSignalDetector:
             options = self._prefetched_option_chains
             
             if not options:
-                # Get nearby strikes with high OI
-                try:
-                    options = self.market_data.get_option_chain_snapshot(
-                        symbol,
-                        current_price - 3,
-                        current_price + 3
-                    )
-                except:
-                    pass
+                # Skip option chain check in async context
+                # Options should be pre-fetched by the strategy
+                logger.debug("No pre-fetched option chains available for options pin detection")
             
             if not options:
                 return {'score': 0, 'details': 'No option data', 'confidence': 'LOW'}
