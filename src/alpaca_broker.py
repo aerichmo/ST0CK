@@ -544,16 +544,34 @@ class AlpacaBroker(BrokerInterface):
             contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
             
             # Create request for option contracts
-            req = GetOptionContractsRequest(
-                underlying_symbol=[symbol],
-                status=AssetStatus.ACTIVE,
-                expiration_date=expiration.strftime('%Y-%m-%d'),
-                type=contract_type
-            )
+            # Note: Try different parameter names based on Alpaca SDK
+            try:
+                req = GetOptionContractsRequest(
+                    underlying_symbols=[symbol],  # Try plural first
+                    status=AssetStatus.ACTIVE,
+                    expiration_date=expiration.strftime('%Y-%m-%d'),
+                    type=contract_type
+                )
+            except TypeError:
+                # If plural doesn't work, try other common parameter names
+                try:
+                    req = GetOptionContractsRequest(
+                        underlying_symbol=symbol,  # Try singular without list
+                        status=AssetStatus.ACTIVE,
+                        expiration_date=expiration.strftime('%Y-%m-%d'),
+                        type=contract_type
+                    )
+                except TypeError:
+                    # Try minimal request
+                    req = GetOptionContractsRequest(
+                        symbol=symbol,
+                        expiration_date=expiration.strftime('%Y-%m-%d'),
+                        type=contract_type
+                    )
             
             # Debug: log the exact request being sent
-            logger.info(f"GetOptionContractsRequest: underlying_symbol={req.underlying_symbol}, "
-                       f"expiration_date={req.expiration_date}, type={req.type}, status={req.status}")
+            logger.info(f"GetOptionContractsRequest created - request type: {type(req)}")
+            logger.info(f"Request attributes: {dir(req)}")
             
             # Get contracts from Alpaca using TradingClient
             contracts_response = self.trading_client.get_option_contracts(req)
