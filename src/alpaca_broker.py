@@ -563,10 +563,16 @@ class AlpacaBroker(BrokerInterface):
             for contract in contracts_list:
                 # Handle both object and dict access patterns
                 if hasattr(contract, 'symbol'):
+                    # Debug: log contract attributes
+                    logger.debug(f"Contract attributes: {dir(contract)}")
+                    
+                    # Use expiration_date attribute (correct for Alpaca SDK)
+                    expiration_date = contract.expiration_date if hasattr(contract, 'expiration_date') else None
+                    
                     result.append({
                         'symbol': contract.symbol,  # OCC format symbol
                         'strike': float(contract.strike_price),
-                        'expiration': contract.expiration,
+                        'expiration': expiration_date,
                         'type': 'CALL' if contract.contract_type == ContractType.CALL else 'PUT',
                         'underlying': contract.underlying_symbol,
                         'contract_size': contract.size if hasattr(contract, 'size') else 100,
