@@ -357,8 +357,11 @@ class AlpacaBroker(BrokerInterface):
             if contract_symbol in quotes:
                 quote = quotes[contract_symbol]
                 
-                # Get underlying price for context
-                underlying_symbol = contract_symbol[:3]  # Extract SPY from option symbol
+                # Get underlying price for context - extract underlying symbol properly
+                # For symbols like SPY250725C00590000 -> SPY, AA250725C00015000 -> AA  
+                import re
+                match = re.match(r'^([A-Z]+)', contract_symbol)
+                underlying_symbol = match.group(1) if match else contract_symbol[:3]
                 stock_request = StockQuotesRequest(
                     symbol_or_symbols=underlying_symbol,
                     limit=1,
@@ -531,6 +534,8 @@ class AlpacaBroker(BrokerInterface):
         """
         Get option contracts for a symbol and expiration using Alpaca options API
         """
+        logger.info(f"Requesting {option_type} option contracts for symbol: '{symbol}', expiration: {expiration}")
+        
         if not self.connected:
             return None
             
