@@ -361,12 +361,18 @@ class UnifiedMarketData:
         Async version of get option chain snapshot for a price range
         """
         try:
-            # Get nearest expiration
+            # Get nearest expiration - for 0-DTE trading, use today if it's a weekday
             today = datetime.now(self.eastern).date()
-            friday = today + timedelta(days=(4 - today.weekday()) % 7)
-            if friday == today:
-                friday = today + timedelta(days=7)
-            expiration = datetime.combine(friday, datetime.min.time())
+            
+            # For 0-DTE strategy, prefer same-day expiration if it's a trading day
+            if today.weekday() < 5:  # Monday = 0, Friday = 4
+                expiration = datetime.combine(today, datetime.min.time())
+            else:
+                # If weekend, get next Friday
+                friday = today + timedelta(days=(4 - today.weekday()) % 7)
+                if friday <= today:  # If today is Friday or later in week
+                    friday = today + timedelta(days=7)
+                expiration = datetime.combine(friday, datetime.min.time())
             
             # Get both calls and puts concurrently
             calls_task = self.get_option_chain(symbol, expiration, 'CALL')
