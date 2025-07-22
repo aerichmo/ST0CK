@@ -328,6 +328,13 @@ class AlpacaBroker(BrokerInterface):
         """
         Get real-time option quote using Alpaca's Options API
         """
+        logger.debug(f"Requesting option quote for symbol: '{contract_symbol}'")
+        
+        # Validate symbol format - should be like SPY250719C00590000
+        if len(contract_symbol) < 10 or not any(c in contract_symbol for c in ['C', 'P']):
+            logger.warning(f"Invalid option symbol format: {contract_symbol}")
+            return None
+            
         if not self.connected:
             return None
             
@@ -588,6 +595,9 @@ class AlpacaBroker(BrokerInterface):
                         # Try to extract from symbol (SPY251219C00590000 format)
                         symbol_str = contract.symbol
                         type_str = 'CALL' if 'C' in symbol_str[-9:] else 'PUT'
+                    
+                    # Debug: log the contract symbol being added
+                    logger.debug(f"Adding contract symbol: {contract.symbol}, type: {type_str}")
                     
                     result.append({
                         'symbol': contract.symbol,  # OCC format symbol
