@@ -328,11 +328,11 @@ class AlpacaBroker(BrokerInterface):
         """
         Get real-time option quote using Alpaca's Options API
         """
-        logger.debug(f"Requesting option quote for symbol: '{contract_symbol}'")
+        logger.info(f"Requesting option quote for symbol: '{contract_symbol}' (length: {len(contract_symbol)})")
         
         # Validate symbol format - should be like SPY250719C00590000
         if len(contract_symbol) < 10 or not any(c in contract_symbol for c in ['C', 'P']):
-            logger.warning(f"Invalid option symbol format: {contract_symbol}")
+            logger.error(f"REJECTED invalid option symbol format: '{contract_symbol}' (length: {len(contract_symbol)})")
             return None
             
         if not self.connected:
@@ -570,9 +570,6 @@ class AlpacaBroker(BrokerInterface):
             for contract in contracts_list:
                 # Handle both object and dict access patterns
                 if hasattr(contract, 'symbol'):
-                    # Debug: log contract attributes
-                    logger.debug(f"Contract attributes: {dir(contract)}")
-                    
                     # Use expiration_date attribute (correct for Alpaca SDK)
                     expiration_date = contract.expiration_date if hasattr(contract, 'expiration_date') else None
                     
@@ -596,8 +593,9 @@ class AlpacaBroker(BrokerInterface):
                         symbol_str = contract.symbol
                         type_str = 'CALL' if 'C' in symbol_str[-9:] else 'PUT'
                     
-                    # Debug: log the contract symbol being added
-                    logger.debug(f"Adding contract symbol: {contract.symbol}, type: {type_str}")
+                    # Log the contract symbol being added - first few only
+                    if len(result) < 5:  # Only log first 5 contracts
+                        logger.info(f"Adding contract symbol: {contract.symbol}, type: {type_str}, strike: {contract.strike_price}")
                     
                     result.append({
                         'symbol': contract.symbol,  # OCC format symbol
