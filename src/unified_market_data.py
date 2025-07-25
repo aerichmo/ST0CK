@@ -212,6 +212,9 @@ class UnifiedMarketData:
                 )
                 
                 if contracts:
+                    # Log that we got contracts
+                    self.logger.info(f"Got {len(contracts)} {option_type} contracts from broker for {symbol}")
+                    
                     # Get current stock price for filtering
                     stock_quote = await self.get_quote(symbol)
                     if not stock_quote:
@@ -230,7 +233,7 @@ class UnifiedMarketData:
                         if lower_bound <= c['strike'] <= upper_bound
                     ]
                     
-                    self.logger.info(f"Filtered {len(contracts)} contracts to {len(filtered_contracts)} near-the-money options")
+                    self.logger.info(f"Filtered {len(contracts)} contracts to {len(filtered_contracts)} near-the-money options (price: ${current_price:.2f}, range: ${lower_bound:.2f}-${upper_bound:.2f})")
                     
                     # Get quotes only for filtered contracts
                     if filtered_contracts:

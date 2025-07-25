@@ -49,7 +49,8 @@ class ST0CKGStrategy(TradingStrategy):
         options_config = {
             "options": {
                 "target_delta": 0.30,  # Target delta for options
-                "delta_tolerance": 0.10  # Delta tolerance range
+                "delta_tolerance": 0.10,  # Delta tolerance range
+                "max_spread_pct": 0.10  # Maximum bid-ask spread (10%)
             }
         }
         self.options_selector = FastOptionsSelector(options_config, market_data_provider)

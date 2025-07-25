@@ -215,7 +215,8 @@ class FastOptionsSelector:
         # Final spread check
         if best['ask'] > 0:
             spread_pct = (best['ask'] - best['bid']) / best['ask']
-            if spread_pct > self.config["options"]["max_spread_pct"]:
+            max_spread = self.config["options"].get("max_spread_pct", 0.10)  # Default to 10%
+            if spread_pct > max_spread:
                 logger.warning(f"Spread too wide: {spread_pct:.1%}")
                 return None
         
