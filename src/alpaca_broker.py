@@ -650,6 +650,32 @@ class AlpacaBroker(BrokerInterface):
                     logger.warning(f"Unexpected contract format: {type(contract)}")
             
             logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
+            
+            # HOTFIX: Filter contracts to near-the-money to reduce API calls
+            # Get current stock price and filter to 5% range
+            try:
+                from alpaca.data.requests import StockQuotesRequest
+                stock_request = StockQuotesRequest(symbol_or_symbols=symbol, limit=1, feed='iex')
+                stock_quotes = self.data_client.get_stock_quotes(stock_request)
+                
+                if symbol in stock_quotes and len(stock_quotes[symbol]) > 0:
+                    current_price = float(stock_quotes[symbol][0].ask_price)
+                    lower_bound = current_price * 0.95
+                    upper_bound = current_price * 1.05
+                    
+                    filtered_result = [
+                        c for c in result 
+                        if lower_bound <= c['strike'] <= upper_bound
+                    ]
+                    
+                    logger.info(f"HOTFIX: Filtered {len(result)} contracts to {len(filtered_result)} near-the-money (price: ${current_price:.2f}, range: ${lower_bound:.2f}-${upper_bound:.2f})")
+                    return filtered_result
+                else:
+                    logger.warning(f"HOTFIX: Could not get stock price for {symbol}, returning all contracts")
+                    
+            except Exception as e:
+                logger.warning(f"HOTFIX: Filtering failed, returning all contracts: {e}")
+            
             return result
             
         except Exception as e:
