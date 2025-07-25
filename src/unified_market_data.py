@@ -212,30 +212,51 @@ class UnifiedMarketData:
                 )
                 
                 if contracts:
-                    # Get quotes for all contracts concurrently
-                    contract_symbols = [c['symbol'] for c in contracts]
-                    quotes = await self.get_option_quotes(contract_symbols)
+                    # Get current stock price for filtering
+                    stock_quote = await self.get_quote(symbol)
+                    if not stock_quote:
+                        self.logger.error(f"Failed to get stock quote for {symbol}")
+                        return None
                     
-                    # Merge contract and quote data
-                    for contract in contracts:
-                        if contract['symbol'] in quotes:
-                            quote = quotes[contract['symbol']]
-                            contract.update({
-                                'bid': quote.get('bid', 0),
-                                'ask': quote.get('ask', 0),
-                                'mid': (quote.get('bid', 0) + quote.get('ask', 0)) / 2 if quote.get('bid') and quote.get('ask') else 0,
-                                'spread': quote.get('ask', 0) - quote.get('bid', 0) if quote.get('bid') and quote.get('ask') else 0,
-                                'volume': quote.get('volume', 0),
-                                'open_interest': quote.get('open_interest', 0),
-                                'iv': quote.get('iv', 0.25),  # Default IV if not provided
-                                'delta': quote.get('delta', 0.5),  # Default delta
-                                'underlying_price': quote.get('underlying_price', 0)
-                            })
+                    current_price = stock_quote['price']
+                    
+                    # Filter contracts to only relevant strikes (within 5% of current price)
+                    # This dramatically reduces API calls from 100+ to ~10-20
+                    lower_bound = current_price * 0.95
+                    upper_bound = current_price * 1.05
+                    
+                    filtered_contracts = [
+                        c for c in contracts 
+                        if lower_bound <= c['strike'] <= upper_bound
+                    ]
+                    
+                    self.logger.info(f"Filtered {len(contracts)} contracts to {len(filtered_contracts)} near-the-money options")
+                    
+                    # Get quotes only for filtered contracts
+                    if filtered_contracts:
+                        contract_symbols = [c['symbol'] for c in filtered_contracts]
+                        quotes = await self.get_option_quotes(contract_symbols)
+                        
+                        # Merge contract and quote data
+                        for contract in filtered_contracts:
+                            if contract['symbol'] in quotes:
+                                quote = quotes[contract['symbol']]
+                                contract.update({
+                                    'bid': quote.get('bid', 0),
+                                    'ask': quote.get('ask', 0),
+                                    'mid': (quote.get('bid', 0) + quote.get('ask', 0)) / 2 if quote.get('bid') and quote.get('ask') else 0,
+                                    'spread': quote.get('ask', 0) - quote.get('bid', 0) if quote.get('bid') and quote.get('ask') else 0,
+                                    'volume': quote.get('volume', 0),
+                                    'open_interest': quote.get('open_interest', 0),
+                                    'iv': quote.get('iv', 0.25),  # Default IV if not provided
+                                    'delta': quote.get('delta', 0.5),  # Default delta
+                                    'underlying_price': quote.get('underlying_price', 0)
+                                })
                     
                     # Cache the result
-                    self.cache.set(cache_key, contracts, UnifiedCache.TTL_OPTIONS)
+                    self.cache.set(cache_key, filtered_contracts, UnifiedCache.TTL_OPTIONS)
                     
-                    return contracts
+                    return filtered_contracts
                     
         except Exception as e:
             self.logger.error(f"Failed to get option chain for {symbol}: {e}")
@@ -252,20 +273,30 @@ class UnifiedMarketData:
         quotes = {}
         
         try:
-            # Get quotes concurrently for all symbols
-            tasks = []
-            for symbol in symbols:
-                task = asyncio.to_thread(self.broker.get_option_quote, symbol)
-                tasks.append(task)
-            
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Process results
-            for symbol, result in zip(symbols, results):
-                if isinstance(result, dict) and result:
-                    quotes[symbol] = result
-                elif isinstance(result, Exception):
-                    self.logger.warning(f"Failed to get quote for {symbol}: {result}")
+            # Limit concurrent requests to avoid overwhelming the API
+            # Process in batches of 10
+            batch_size = 10
+            for i in range(0, len(symbols), batch_size):
+                batch = symbols[i:i + batch_size]
+                
+                # Get quotes concurrently for this batch
+                tasks = []
+                for symbol in batch:
+                    task = asyncio.to_thread(self.broker.get_option_quote, symbol)
+                    tasks.append(task)
+                
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for symbol, result in zip(batch, results):
+                    if isinstance(result, dict) and result:
+                        quotes[symbol] = result
+                    elif isinstance(result, Exception):
+                        self.logger.warning(f"Failed to get quote for {symbol}: {result}")
+                
+                # Small delay between batches to avoid rate limiting
+                if i + batch_size < len(symbols):
+                    await asyncio.sleep(0.1)
                     
         except Exception as e:
             self.logger.error(f"Error getting option quotes: {e}")
