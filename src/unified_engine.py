@@ -330,17 +330,43 @@ class UnifiedTradingEngine:
                 
                 self.positions[order.id] = position
                 
-                # Log to database
-                # Convert datetime objects to strings for JSON serialization
-                trade_data = {
-                    'symbol': position.symbol,
-                    'action': f'BUY_{position.side.upper()}',
-                    'quantity': position.quantity,
-                    'entry_price': position.entry_price,
-                    'entry_time': position.entry_time,
-                    'strategy_details': self._serialize_signal(signal)
-                }
-                self.db.log_trade(trade_data)
+                # Log to database based on strategy type
+                # Determine if this is a stock or option trade
+                is_option_trade = any(key in signal for key in ['option_type', 'strike', 'expiry', 'contract_symbol'])
+                
+                if is_option_trade:
+                    # Log option trade
+                    trade_data = {
+                        'position_id': position.id,
+                        'symbol': signal.get('underlying_symbol', position.symbol),
+                        'contract_symbol': signal.get('contract_symbol', position.symbol),
+                        'option_type': signal.get('option_type', 'CALL'),
+                        'strike': signal.get('strike', 0),
+                        'expiry': signal.get('expiry', datetime.now()),
+                        'signal_type': signal.get('signal_type', 'unknown'),
+                        'entry_time': position.entry_time,
+                        'entry_price': position.entry_price,
+                        'contracts': position.quantity,
+                        'delta': signal.get('delta'),
+                        'gamma': signal.get('gamma'),
+                        'theta': signal.get('theta'),
+                        'vega': signal.get('vega'),
+                        'iv': signal.get('iv'),
+                        'strategy_details': self._serialize_signal(signal)
+                    }
+                    self.db.log_option_trade(self.bot_id, trade_data)
+                else:
+                    # Log stock trade
+                    trade_data = {
+                        'position_id': position.id,
+                        'symbol': position.symbol,
+                        'action': 'BUY' if position.side == 'long' else 'SELL',
+                        'quantity': position.quantity,
+                        'entry_price': position.entry_price,
+                        'entry_time': position.entry_time,
+                        'strategy_details': self._serialize_signal(signal)
+                    }
+                    self.db.log_stock_trade(self.bot_id, trade_data)
                 
                 self.logger.info(f"[{self.bot_id}] Entered position: {position.symbol} x{position.quantity} @ ${position.entry_price}")
                 
@@ -381,14 +407,22 @@ class UnifiedTradingEngine:
                     
                     pnl_pct = (pnl / (position.entry_price * position.quantity)) * 100
                     
-                    # Update database
-                    self.db.update_trade_exit(
-                        position.id,
-                        exit_price,
-                        exit_time,
-                        pnl,
-                        pnl_pct
-                    )
+                    # Update database based on trade type
+                    # Check if this is an option trade by examining strategy_data
+                    is_option_trade = any(key in position.strategy_data for key in ['option_type', 'strike', 'expiry', 'contract_symbol'])
+                    
+                    exit_data = {
+                        'exit_price': exit_price,
+                        'exit_time': exit_time,
+                        'exit_reason': exit_reason,
+                        'realized_pnl': pnl,
+                        'pnl_percent': pnl_pct
+                    }
+                    
+                    if is_option_trade:
+                        self.db.update_option_trade_exit(position.id, exit_data)
+                    else:
+                        self.db.update_stock_trade_exit(position.id, exit_data)
                     
                     # Update daily metrics
                     self.daily_metrics['trades'] += 1

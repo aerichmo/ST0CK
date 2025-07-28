@@ -1,5 +1,41 @@
 # ST0CK Changelog
 
+## [2025-07-28] - Database V2 Implementation - Fix Position ID Constraint Error
+
+### Fixed
+- **Database Position ID Constraint Error**: Resolved SQLAlchemy IntegrityError that occurred when logging stock trades
+  - Error: "NOT NULL constraint failed: trades.option_type" 
+  - Root cause: Single trades table required option-specific fields for all trades including stocks
+
+### Changed
+- **Database Schema Separation**: Implemented separate tables for different trade types
+  - `stock_trades` table for stock trading strategies (ST0CKA)
+  - `option_trades` table for options strategies (ST0CKG)
+  - `straddle_trades` table for complex option strategies
+  - Each table has appropriate columns without unnecessary constraints
+
+### Technical Implementation
+- Created `unified_database_v2.py` with new schema design
+- Updated `unified_engine.py` to:
+  - Detect trade type based on signal data
+  - Use `log_stock_trade()` for stock trades
+  - Use `log_option_trade()` for option trades
+  - Update exits with appropriate methods
+- Added compatibility methods:
+  - `get_trades()` combines data from both tables
+  - `register_bot()` for backward compatibility
+
+### Migration
+- Backed up original database as `unified_database_old.py`
+- New database creates separate tables automatically
+- Existing data remains in old `trades` table
+
+### Benefits
+- No more constraint violations when logging trades
+- Cleaner data model with type-specific fields
+- Better performance with appropriate indexes
+- Easier to query strategy-specific data
+
 ## [2025-07-28] - ST0CKA Smart Entry Implementation
 
 ### Changed
