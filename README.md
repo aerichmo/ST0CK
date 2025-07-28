@@ -7,10 +7,10 @@ High-performance automated trading platform for stocks and options using Alpaca 
 ### ✅ ST0CKG - Advanced Pattern Recognition (SPY Only)
 - **Strategy**: Multi-signal pattern recognition with 6 entry types
 - **Instrument**: SPY options only (0-DTE)
-- **Sessions**: 
-  - Morning: 9:30-11:00 AM ET (40-45 delta options)
-  - Midday: 1:00-2:30 PM ET (30-35 delta options)
-  - Power Hour: 3:00-3:45 PM ET (45-50 delta options)
+- **Sessions** (Optimized for volatility): 
+  - Morning: 9:30-11:00 AM ET (40-45 delta options) - Highest volatility
+  - ~~Midday: 1:00-2:30 PM ET~~ - REMOVED (low volatility period)
+  - Power Hour: 3:00-3:45 PM ET (45-50 delta options) - Second volatility spike
 - **Capital**: $5,000
 - **Risk**: Dynamic 2-6% per trade (aggressive for small capital)
 - **Target**: 25-40% monthly returns
@@ -100,16 +100,17 @@ Based on enhanced Graystone methodology:
 ## 🎯 Active Trading Strategies
 
 ### ST0CKG - Advanced Options Trading
-- **Sessions**: Morning (9:30-11:00), Midday (1:00-2:30), Power Hour (3:00-3:45)
+- **Sessions**: Morning (9:30-11:00), Power Hour (3:00-3:45)
 - **Signals**: 6 pattern types with weighted scoring
 - **Risk**: Dynamic 2-6% per trade
 - **Target**: 25-40% monthly returns
 
 ### ST0CKA - Simple Stock Trading
-- **Session**: Morning only (9:30-11:00 AM ET)
+- **Sessions**: Morning (9:30-11:00), Power Hour (3:00-3:45)
 - **Strategy**: Buy SPY, sell for $0.01 profit
 - **Risk**: Fixed 1 share per trade
 - **Target**: Consistent small gains
+- **Updated**: Now trades during both high-volatility periods
 
 ## 📚 Documentation
 

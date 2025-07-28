@@ -11,10 +11,11 @@ from ..unified_logging import get_logger
 
 class ST0CKAStrategy(TradingStrategy):
     """
-    Simple SPY scalping strategy
-    - Buy 1 share of SPY between 9:30-10:00
-    - Sell for $0.01 profit
-    - Force exit between 10:00-11:00 if not profitable
+    Simple SPY scalping strategy with dual-session trading
+    - Morning: Buy 9:30-10:00, Sell 10:00-11:00
+    - Power Hour: Buy 3:00-3:30, Sell 3:30-3:45
+    - Target: $0.01 profit per share
+    - Based on high-volatility periods research
     """
     
     def __init__(self, mode: str = "simple"):
@@ -32,11 +33,24 @@ class ST0CKAStrategy(TradingStrategy):
         self.profit_target = 0.01  # $0.01 profit per share
         self.position_size = 1     # Always 1 share
         
-        # Trading windows
-        self.buy_window_start = "09:30"
-        self.buy_window_end = "10:00"
-        self.sell_window_start = "10:00"
-        self.sell_window_end = "11:00"
+        # Trading windows - Morning and Power Hour sessions
+        # Morning session (highest volatility)
+        self.morning_buy_start = "09:30"
+        self.morning_buy_end = "10:00"
+        self.morning_sell_start = "10:00"
+        self.morning_sell_end = "11:00"
+        
+        # Power hour session (second volatility spike)
+        self.power_buy_start = "15:00"  # 3:00 PM
+        self.power_buy_end = "15:30"    # 3:30 PM
+        self.power_sell_start = "15:30"  # 3:30 PM
+        self.power_sell_end = "15:45"    # 3:45 PM
+        
+        # Legacy compatibility
+        self.buy_window_start = self.morning_buy_start
+        self.buy_window_end = self.morning_buy_end
+        self.sell_window_start = self.morning_sell_start
+        self.sell_window_end = self.morning_sell_end
         
         # Advanced mode parameters
         self.max_positions = 5 if mode == "advanced" else 1
@@ -51,8 +65,10 @@ class ST0CKAStrategy(TradingStrategy):
             'profit_target': self.profit_target,
             'position_size': self.position_size,
             'max_positions': self.max_positions,
-            'trading_window_start': self.buy_window_start,
-            'trading_window_end': self.sell_window_end,
+            'trading_sessions': {
+                'morning': f"{self.morning_buy_start}-{self.morning_sell_end}",
+                'power_hour': f"{self.power_buy_start}-{self.power_sell_end}"
+            },
             'cycle_delay': 5,  # 5 second cycle delay
             'max_consecutive_losses': 3,
             'max_daily_loss': -100.0,
@@ -64,14 +80,14 @@ class ST0CKAStrategy(TradingStrategy):
         Check if we should enter a position
         
         Conditions:
-        - Within buy window (9:30-10:00)
+        - Within buy windows (9:30-10:00 or 3:00-3:30)
         - Have less than max positions
         - SPY price available
         - In advanced mode: wait entry_interval_seconds between entries
         """
         now = datetime.now(self.eastern)
         
-        # Check if within buy window
+        # Check if within any buy window
         if not self._in_buy_window(now):
             return None
         
@@ -127,7 +143,7 @@ class ST0CKAStrategy(TradingStrategy):
         
         Exit conditions:
         1. Profit target reached ($0.01 profit)
-        2. Force exit if in sell window (10:00-11:00)
+        2. Force exit if in sell window (10:00-11:00 or 3:30-3:45)
         """
         if position.symbol != 'SPY':
             return None
@@ -166,21 +182,37 @@ class ST0CKAStrategy(TradingStrategy):
             }
     
     def _in_buy_window(self, now: datetime) -> bool:
-        """Check if within buy window"""
-        start_hour, start_min = map(int, self.buy_window_start.split(':'))
-        end_hour, end_min = map(int, self.buy_window_end.split(':'))
+        """Check if within any buy window"""
+        # Morning buy window
+        morning_start_hour, morning_start_min = map(int, self.morning_buy_start.split(':'))
+        morning_end_hour, morning_end_min = map(int, self.morning_buy_end.split(':'))
         
-        window_start = now.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
-        window_end = now.replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+        morning_start = now.replace(hour=morning_start_hour, minute=morning_start_min, second=0, microsecond=0)
+        morning_end = now.replace(hour=morning_end_hour, minute=morning_end_min, second=0, microsecond=0)
         
-        return window_start <= now <= window_end
+        # Power hour buy window
+        power_start_hour, power_start_min = map(int, self.power_buy_start.split(':'))
+        power_end_hour, power_end_min = map(int, self.power_buy_end.split(':'))
+        
+        power_start = now.replace(hour=power_start_hour, minute=power_start_min, second=0, microsecond=0)
+        power_end = now.replace(hour=power_end_hour, minute=power_end_min, second=0, microsecond=0)
+        
+        return (morning_start <= now <= morning_end) or (power_start <= now <= power_end)
     
     def _in_sell_window(self, now: datetime) -> bool:
-        """Check if within sell window"""
-        start_hour, start_min = map(int, self.sell_window_start.split(':'))
-        end_hour, end_min = map(int, self.sell_window_end.split(':'))
+        """Check if within any sell window"""
+        # Morning sell window
+        morning_start_hour, morning_start_min = map(int, self.morning_sell_start.split(':'))
+        morning_end_hour, morning_end_min = map(int, self.morning_sell_end.split(':'))
         
-        window_start = now.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
-        window_end = now.replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+        morning_start = now.replace(hour=morning_start_hour, minute=morning_start_min, second=0, microsecond=0)
+        morning_end = now.replace(hour=morning_end_hour, minute=morning_end_min, second=0, microsecond=0)
         
-        return window_start <= now <= window_end
+        # Power hour sell window
+        power_start_hour, power_start_min = map(int, self.power_sell_start.split(':'))
+        power_end_hour, power_end_min = map(int, self.power_sell_end.split(':'))
+        
+        power_start = now.replace(hour=power_start_hour, minute=power_start_min, second=0, microsecond=0)
+        power_end = now.replace(hour=power_end_hour, minute=power_end_min, second=0, microsecond=0)
+        
+        return (morning_start <= now <= morning_end) or (power_start <= now <= power_end)

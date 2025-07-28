@@ -46,6 +46,22 @@ class ST0CKATrueGammaStrategy(TradingStrategy):
         self.logger = get_logger(__name__)
         self.eastern = pytz.timezone('US/Eastern')
         
+        # Import optimal hours configuration
+        try:
+            from ...config.gamma_scalping_hours import (
+                get_optimal_sessions, 
+                get_current_volatility_multiplier,
+                should_trade_gamma
+            )
+            self.get_optimal_sessions = get_optimal_sessions
+            self.get_volatility_multiplier = get_current_volatility_multiplier
+            self.should_trade_gamma = should_trade_gamma
+        except ImportError:
+            self.logger.warning("Gamma scalping hours config not found, using defaults")
+            self.get_optimal_sessions = lambda x: []
+            self.get_volatility_multiplier = lambda x: 1.0
+            self.should_trade_gamma = lambda x, y: True
+        
         # Check if gamma scalping components are available
         self.gamma_enabled = DeltaEngine is not None
         

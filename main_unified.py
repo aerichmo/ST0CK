@@ -81,13 +81,13 @@ BOT_REGISTRY = {
     'st0ckg': {
         'strategy_class': ST0CKGStrategy,
         'strategy_args': {
-            'start_time': '09:40',
-            'end_time': '10:30',
+            'start_time': '09:30',  # Updated to capture full morning volatility
+            'end_time': '11:00',    # Extended to full opening drive window
             'max_positions': 2
         },
         'api_key_env': 'ST0CKGKEY',
         'secret_key_env': 'ST0CKGSECRET',
-        'description': 'Battle Lines 0-DTE options strategy'
+        'description': 'Battle Lines 0-DTE options strategy - Morning & Power Hour'
     }
 }
 
