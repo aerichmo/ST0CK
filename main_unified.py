@@ -35,7 +35,7 @@ try:
     from src.unified_logging import configure_logging, get_logger
     from src.unified_database import UnifiedDatabaseManager
     from src.unified_engine import UnifiedTradingEngine
-    from src.strategies import ST0CKAStrategy, ST0CKGStrategy, ST0CKAGammaStrategy
+    from src.strategies import ST0CKAStrategy, ST0CKAEnhancedStrategy, ST0CKGStrategy, ST0CKAGammaStrategy
     from src.error_reporter import ErrorReporter
 except ImportError as e:
     with open('logs/import_error.log', 'w') as f:
@@ -55,7 +55,28 @@ BOT_REGISTRY = {
         'strategy_args': {'mode': 'simple'},
         'api_key_env': 'ST0CKAKEY',
         'secret_key_env': 'ST0CKASECRET',
-        'description': 'Simple SPY scalping - $0.01 profit target'
+        'description': 'Smart entry SPY scalping - Waits for optimal conditions'
+    },
+    'st0cka_volatility': {
+        'strategy_class': ST0CKAEnhancedStrategy,
+        'strategy_args': {'mode': 'volatility'},
+        'api_key_env': 'ST0CKAKEY',
+        'secret_key_env': 'ST0CKASECRET',
+        'description': 'Volatility-based SPY scalping - Dynamic sizing'
+    },
+    'st0cka_straddle': {
+        'strategy_class': ST0CKAEnhancedStrategy,
+        'strategy_args': {'mode': 'straddle'},
+        'api_key_env': 'ST0CKAKEY',
+        'secret_key_env': 'ST0CKASECRET',
+        'description': 'Options straddles - Pure volatility harvesting'
+    },
+    'st0cka_adaptive': {
+        'strategy_class': ST0CKAEnhancedStrategy,
+        'strategy_args': {'mode': 'adaptive'},
+        'api_key_env': 'ST0CKAKEY',
+        'secret_key_env': 'ST0CKASECRET',
+        'description': 'Adaptive strategy - Switches based on conditions'
     },
     'st0cka_advanced': {
         'strategy_class': ST0CKAStrategy,
@@ -222,8 +243,9 @@ Available bots:
 
 Examples:
   python main_unified.py st0cka               # Run simple scalping
-  python main_unified.py st0cka_gamma         # Run volatility-based scalping
-  python main_unified.py st0cka_options       # Run true options gamma scalping
+  python main_unified.py st0cka_volatility    # Run with volatility-based sizing
+  python main_unified.py st0cka_straddle      # Run options straddles (Alpaca-style)
+  python main_unified.py st0cka_adaptive      # Run adaptive mode
   python main_unified.py st0cka st0ckg        # Run multiple bots
   python main_unified.py --all                 # Run all bots
   python main_unified.py --list                # List available bots
