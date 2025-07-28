@@ -333,10 +333,11 @@ class ST0CKGSignalDetector:
             
             for opt in options:
                 oi = opt.get('open_interest', 0)
-                if opt['option_type'] == 'CALL' and oi > max_call_oi:
+                opt_type = opt.get('type', opt.get('option_type', ''))
+                if opt_type == 'CALL' and oi > max_call_oi:
                     max_call_oi = oi
                     max_oi_call_strike = opt['strike']
-                elif opt['option_type'] == 'PUT' and oi > max_put_oi:
+                elif opt_type == 'PUT' and oi > max_put_oi:
                     max_put_oi = oi
                     max_oi_put_strike = opt['strike']
             

@@ -75,6 +75,40 @@ class UnifiedMarketData:
         if cached:
             return cached
         
+        # Check if this is an option symbol (contains numbers after letter indicating strike)
+        is_option = any(char.isdigit() for char in symbol[3:]) if len(symbol) > 3 else False
+        
+        if is_option:
+            # For options, use the broker's get_option_quote method
+            try:
+                async with self.rate_limiter:
+                    quote_data = await asyncio.to_thread(
+                        self.broker.get_option_quote,
+                        symbol
+                    )
+                    
+                    if quote_data:
+                        result = {
+                            'symbol': symbol,
+                            'price': quote_data.get('last_price', (quote_data.get('bid', 0) + quote_data.get('ask', 0)) / 2),
+                            'bid': quote_data.get('bid', 0),
+                            'ask': quote_data.get('ask', 0),
+                            'bid_size': quote_data.get('bid_size', 0),
+                            'ask_size': quote_data.get('ask_size', 0),
+                            'timestamp': quote_data.get('timestamp', datetime.now())
+                        }
+                        
+                        # Cache the result
+                        self.cache.set(cache_key, result, UnifiedCache.TTL_QUOTES)
+                        
+                        return result
+                        
+            except Exception as e:
+                # Option quotes may fail for various reasons - this is not critical
+                self.logger.debug(f"Failed to get option quote for {symbol}: {e}")
+                return None
+        
+        # Stock quotes
         try:
             async with self.rate_limiter:
                 # Use asyncio.to_thread for sync API calls
