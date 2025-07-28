@@ -87,31 +87,27 @@ jobs:
         ls -la
         echo "Python version:"
         python --version
-        echo "Running bot for 30 seconds to test startup..."
-        timeout 30s python main_unified.py st0ckg || {
+        echo "Starting bot for live trading session (9:40-10:30 ET)..."
+        python main_unified.py st0ckg || {
           EXIT_CODE=$?
-          if [ $EXIT_CODE -eq 124 ]; then
-            echo "Bot ran successfully for 30 seconds (timeout as expected)"
-            echo "Checking logs..."
-            if [ -f logs/st0ckg_*.log ]; then
-              echo "=== Bot Log Preview ==="
-              tail -20 logs/st0ckg_*.log || true
-            fi
-            exit 0
-          else
-            echo "Bot failed with exit code $EXIT_CODE"
-            echo "Checking for error logs..."
-            ls -la logs/
-            if [ -f logs/startup_error.log ]; then
-              echo "=== Startup Error Log ==="
-              cat logs/startup_error.log
-            fi
-            if [ -f logs/import_error.log ]; then
-              echo "=== Import Error Log ==="
-              cat logs/import_error.log
-            fi
-            exit 1
+          echo "Bot exited with code $EXIT_CODE"
+          echo "Checking for error logs..."
+          ls -la logs/
+          if [ -f logs/startup_error.log ]; then
+            echo "=== Startup Error Log ==="
+            cat logs/startup_error.log
           fi
+          if [ -f logs/import_error.log ]; then
+            echo "=== Import Error Log ==="
+            cat logs/import_error.log
+          fi
+          # Check the latest log file
+          LATEST_LOG=$(ls -t logs/st0ckg_*.log 2>/dev/null | head -1)
+          if [ -n "$LATEST_LOG" ]; then
+            echo "=== Bot Log (last 50 lines) ==="
+            tail -50 "$LATEST_LOG" || true
+          fi
+          exit $EXIT_CODE
         }
       env:
         PYTHONUNBUFFERED: 1
