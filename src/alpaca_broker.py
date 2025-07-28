@@ -577,6 +577,7 @@ class AlpacaBroker(BrokerInterface):
             contracts_response = self.trading_client.get_option_contracts(req)
             
             # Debug log the response
+            logger.info(f"Received response for {symbol} {option_type} options expiring {expiration.strftime('%Y-%m-%d')}")
             logger.info(f"Option contracts response: found {len(list(contracts_response)) if hasattr(contracts_response, '__iter__') else 'unknown'} contracts")
             
             # Debug log the response type
@@ -625,7 +626,8 @@ class AlpacaBroker(BrokerInterface):
                     
                     # Log the contract symbol being added - first few only
                     if len(result) < 5:  # Only log first 5 contracts
-                        logger.info(f"Adding contract symbol: {contract.symbol}, type: {type_str}, strike: {contract.strike_price}")
+                        contract_exp_str = expiration_date.strftime('%Y-%m-%d') if expiration_date else 'N/A'
+                        logger.info(f"Adding contract: {contract.symbol}, type: {type_str}, strike: {contract.strike_price}, exp: {contract_exp_str}")
                     
                     result.append({
                         'symbol': contract.symbol,  # OCC format symbol

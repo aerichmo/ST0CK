@@ -199,6 +199,7 @@ class UnifiedMarketData:
         cache_key = CacheKeyBuilder.option_chain(symbol, exp_str, option_type)
         cached = self.cache.get(cache_key)
         if cached:
+            self.logger.debug(f"Using cached option chain for {symbol} {exp_str} {option_type}")
             return cached
         
         try:
@@ -212,8 +213,13 @@ class UnifiedMarketData:
                 )
                 
                 if contracts:
-                    # Log that we got contracts
-                    self.logger.info(f"Got {len(contracts)} {option_type} contracts from broker for {symbol}")
+                    # Log that we got contracts with expiration details
+                    self.logger.info(f"Got {len(contracts)} {option_type} contracts from broker for {symbol} expiring {exp_str}")
+                    
+                    # Log sample contract to see actual expiration dates
+                    if contracts:
+                        sample = contracts[0]
+                        self.logger.info(f"Sample contract: {sample.get('symbol', 'N/A')} - Strike: {sample.get('strike', 'N/A')} - Type: {sample.get('type', 'N/A')}")
                     
                     # Get current stock price for filtering
                     stock_quote = await self.get_quote(symbol)
@@ -396,17 +402,20 @@ class UnifiedMarketData:
         """
         try:
             # Get nearest expiration - for 0-DTE trading, use today if it's a weekday
-            today = datetime.now(self.eastern).date()
+            now = datetime.now(self.eastern)
+            today = now.date()
             
             # For 0-DTE strategy, prefer same-day expiration if it's a trading day
             if today.weekday() < 5:  # Monday = 0, Friday = 4
-                expiration = datetime.combine(today, datetime.min.time())
+                # Use today's date with timezone info for 0-DTE
+                expiration = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                self.logger.info(f"Using 0-DTE expiration: {expiration.strftime('%Y-%m-%d')} for {symbol}")
             else:
-                # If weekend, get next Friday
-                friday = today + timedelta(days=(4 - today.weekday()) % 7)
-                if friday <= today:  # If today is Friday or later in week
-                    friday = today + timedelta(days=7)
-                expiration = datetime.combine(friday, datetime.min.time())
+                # If weekend, get next Monday for 0-DTE
+                days_until_monday = (7 - today.weekday()) % 7
+                expiration = now + timedelta(days=days_until_monday)
+                expiration = expiration.replace(hour=0, minute=0, second=0, microsecond=0)
+                self.logger.info(f"Weekend - using Monday expiration: {expiration.strftime('%Y-%m-%d')} for {symbol}")
             
             # Get both calls and puts concurrently
             calls_task = self.get_option_chain(symbol, expiration, 'CALL')

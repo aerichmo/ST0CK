@@ -331,14 +331,16 @@ class UnifiedTradingEngine:
                 self.positions[order.id] = position
                 
                 # Log to database
-                self.db.log_trade({
+                # Convert datetime objects to strings for JSON serialization
+                trade_data = {
                     'symbol': position.symbol,
                     'action': f'BUY_{position.side.upper()}',
                     'quantity': position.quantity,
                     'entry_price': position.entry_price,
                     'entry_time': position.entry_time,
-                    'strategy_details': signal
-                })
+                    'strategy_details': self._serialize_signal(signal)
+                }
+                self.db.log_trade(trade_data)
                 
                 self.logger.info(f"[{self.bot_id}] Entered position: {position.symbol} x{position.quantity} @ ${position.entry_price}")
                 
@@ -478,6 +480,26 @@ class UnifiedTradingEngine:
             return False
         
         return True
+    
+    def _serialize_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Serialize signal data for JSON storage"""
+        from datetime import date
+        serialized = {}
+        for key, value in signal.items():
+            if isinstance(value, (datetime, date)):
+                serialized[key] = value.isoformat()
+            elif isinstance(value, dict):
+                # Recursively serialize nested dictionaries
+                serialized[key] = self._serialize_signal(value)
+            elif isinstance(value, list):
+                # Handle lists that might contain dates
+                serialized[key] = [
+                    v.isoformat() if isinstance(v, (datetime, date)) else v
+                    for v in value
+                ]
+            else:
+                serialized[key] = value
+        return serialized
     
     async def shutdown(self):
         """Graceful shutdown"""

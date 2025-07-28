@@ -124,8 +124,8 @@ class ST0CKGStrategy(TradingStrategy):
                 if option_snapshot:
                     data['option_chains']['snapshot'] = option_snapshot
                     
-                # Also pre-fetch weekly options
-                expiry = self._get_weekly_expiry_date()
+                # Pre-fetch 0-DTE options for intraday trading
+                expiry = self._get_0dte_expiry_date()
                 expiry_str = expiry.strftime('%Y-%m-%d')
                 
                 target_delta = 0.30  # Default target delta
@@ -428,6 +428,28 @@ class ST0CKGStrategy(TradingStrategy):
         
         expiry = today + timedelta(days=days_until_friday)
         return expiry.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    def _get_0dte_expiry_date(self) -> datetime:
+        """Get 0-DTE (same day) expiry date for SPY options"""
+        now = datetime.now(self.eastern)
+        today = now.date()
+        
+        # Check if today is a weekday (Monday=0, Friday=4)
+        if today.weekday() <= 4:
+            # For 0-DTE, use today's date
+            expiry = now.replace(hour=16, minute=0, second=0, microsecond=0)
+            self.logger.info(f"0-DTE expiry date: {expiry.strftime('%Y-%m-%d')} (today, weekday)")
+            return expiry
+        else:
+            # If weekend, use next Monday for 0-DTE
+            if today.weekday() == 6:  # Sunday
+                days_until_monday = 1
+            else:  # Saturday
+                days_until_monday = 2
+            next_trading_day = now + timedelta(days=days_until_monday)
+            expiry = next_trading_day.replace(hour=16, minute=0, second=0, microsecond=0)
+            self.logger.info(f"0-DTE expiry date: {expiry.strftime('%Y-%m-%d')} (next Monday, weekend adjustment)")
+            return expiry
     
     def _in_trading_window(self, now: datetime) -> bool:
         """Check if within trading window"""

@@ -47,10 +47,12 @@ class FastOptionsSelector:
                 logger.info(f"Using cached option selection for {cache_key}")
                 return cached_contract
         
-        # Get expiration (always use weekly for SPY)
-        expiry = self._get_weekly_expiry()
+        # Get expiration - use 0-DTE for intraday trading
+        expiry = self._get_0dte_expiry()
         expiry_str = expiry.strftime('%Y-%m-%d')
         option_type = 'CALL' if signal_type == 'LONG' else 'PUT'
+        
+        logger.info(f"Selecting {option_type} option for {symbol} with 0-DTE expiry: {expiry_str}")
         
         # Find best options using unified data - async version
         candidates = await self.market_data.find_best_options_async(
@@ -137,10 +139,12 @@ class FastOptionsSelector:
                 return None
         else:
             # Fallback to sync method (will likely fail in async context)
-            # Get expiration (always use weekly for SPY)
-            expiry = self._get_weekly_expiry()
+            # Get expiration - use 0-DTE for intraday trading
+            expiry = self._get_0dte_expiry()
             expiry_str = expiry.strftime('%Y-%m-%d')
             option_type = 'CALL' if signal_type == 'LONG' else 'PUT'
+            
+            logger.info(f"Selecting {option_type} option for {symbol} with 0-DTE expiry: {expiry_str} (sync fallback)")
             
             # Find best options using unified data
             candidates = self.market_data.find_best_options(
@@ -236,6 +240,22 @@ class FastOptionsSelector:
             days_until_friday += 7
         
         return today + timedelta(days=days_until_friday)
+    
+    def _get_0dte_expiry(self) -> datetime:
+        """Get 0-DTE (same day) expiry for SPY"""
+        import pytz
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.now(eastern)
+        
+        # Check if today is a weekday (Monday=0, Friday=4)
+        if now.weekday() <= 4:
+            # Return today's date for 0-DTE
+            return now.replace(hour=16, minute=0, second=0, microsecond=0)
+        else:
+            # If weekend, return next Monday
+            days_until_monday = (7 - now.weekday()) % 7
+            next_monday = now + timedelta(days=days_until_monday)
+            return next_monday.replace(hour=16, minute=0, second=0, microsecond=0)
     
     def clear_cache(self):
         """Clear selection cache"""
