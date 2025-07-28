@@ -654,12 +654,42 @@ class AlpacaBroker(BrokerInterface):
             # HOTFIX: Filter contracts to near-the-money to reduce API calls
             # Get current stock price and filter to 5% range
             try:
-                from alpaca.data.requests import StockQuotesRequest
-                stock_request = StockQuotesRequest(symbol_or_symbols=symbol, limit=1, feed='iex')
-                stock_quotes = self.data_client.get_stock_quotes(stock_request)
+                from alpaca.data.requests import StockLatestQuoteRequest
                 
-                if symbol in stock_quotes and len(stock_quotes[symbol]) > 0:
-                    current_price = float(stock_quotes[symbol][0].ask_price)
+                # Try multiple approaches to get current price
+                current_price = None
+                
+                # Method 1: Try latest quote with IEX feed
+                try:
+                    quote_request = StockLatestQuoteRequest(symbol_or_symbols=symbol, feed="iex")
+                    quotes = self.data_client.get_stock_latest_quote(quote_request)
+                    if symbol in quotes:
+                        quote = quotes[symbol]
+                        # Calculate mid price from bid/ask
+                        if quote.bid_price and quote.ask_price and quote.bid_price > 0 and quote.ask_price > 0:
+                            current_price = float(quote.bid_price + quote.ask_price) / 2
+                        elif quote.ask_price and quote.ask_price > 0:
+                            current_price = float(quote.ask_price)
+                        elif quote.bid_price and quote.bid_price > 0:
+                            current_price = float(quote.bid_price)
+                        else:
+                            current_price = None
+                        
+                        if current_price:
+                            logger.info(f"HOTFIX: Got {symbol} price ${current_price:.2f} from latest quote (bid: ${quote.bid_price}, ask: ${quote.ask_price})")
+                except Exception as e:
+                    logger.debug(f"HOTFIX: Latest quote failed: {e}")
+                
+                # Method 2: If that fails, use a reasonable estimate based on strike range
+                if not current_price:
+                    strikes = [c['strike'] for c in result]
+                    if strikes:
+                        min_strike = min(strikes)
+                        max_strike = max(strikes)
+                        current_price = (min_strike + max_strike) / 2
+                        logger.info(f"HOTFIX: Estimated {symbol} price ${current_price:.2f} from strike range {min_strike}-{max_strike}")
+                
+                if current_price and current_price > 0:
                     lower_bound = current_price * 0.95
                     upper_bound = current_price * 1.05
                     
@@ -671,7 +701,7 @@ class AlpacaBroker(BrokerInterface):
                     logger.info(f"HOTFIX: Filtered {len(result)} contracts to {len(filtered_result)} near-the-money (price: ${current_price:.2f}, range: ${lower_bound:.2f}-${upper_bound:.2f})")
                     return filtered_result
                 else:
-                    logger.warning(f"HOTFIX: Could not get stock price for {symbol}, returning all contracts")
+                    logger.warning(f"HOTFIX: Could not determine stock price for {symbol}, returning all contracts")
                     
             except Exception as e:
                 logger.warning(f"HOTFIX: Filtering failed, returning all contracts: {e}")
