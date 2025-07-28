@@ -1,0 +1,31 @@
+# Gamma Scalping Dependencies
+# Additional requirements for options trading and Greeks calculation
+
+# Core Alpaca SDK with options support
+alpaca-py>=0.13.0
+
+# QuantLib for Greeks calculation
+QuantLib>=1.31
+QuantLib-Python>=1.31
+
+# Numerical libraries
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Options data
+yfinance>=0.2.28  # For historical volatility
+
+# Additional async support
+aiohttp>=3.8.0
+websockets>=11.0
+
+# Data visualization (optional, for monitoring)
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# Performance monitoring
+psutil>=5.9.0
+
+# Note: Main requirements.txt should be installed first
+# Install with: pip install -r requirements.txt -r requirements_gamma.txt

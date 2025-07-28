@@ -35,7 +35,7 @@ try:
     from src.unified_logging import configure_logging, get_logger
     from src.unified_database import UnifiedDatabaseManager
     from src.unified_engine import UnifiedTradingEngine
-    from src.strategies import ST0CKAStrategy, ST0CKGStrategy
+    from src.strategies import ST0CKAStrategy, ST0CKGStrategy, ST0CKAGammaStrategy
     from src.error_reporter import ErrorReporter
 except ImportError as e:
     with open('logs/import_error.log', 'w') as f:
@@ -63,6 +63,20 @@ BOT_REGISTRY = {
         'api_key_env': 'ST0CKAKEY',
         'secret_key_env': 'ST0CKASECRET',
         'description': 'Advanced SPY scalping - Multi-position'
+    },
+    'st0cka_gamma': {
+        'strategy_class': ST0CKAGammaStrategy,
+        'strategy_args': {'mode': 'gamma'},
+        'api_key_env': 'ST0CKAKEY',
+        'secret_key_env': 'ST0CKASECRET',
+        'description': 'Gamma scalping - Volatility-based SPY trading'
+    },
+    'st0cka_options': {
+        'strategy_class': 'gamma_scalping',  # Special marker for gamma scalping
+        'strategy_args': {},
+        'api_key_env': 'ST0CKAKEY',
+        'secret_key_env': 'ST0CKASECRET',
+        'description': 'True gamma scalping - SPY options straddles with delta hedging'
     },
     'st0ckg': {
         'strategy_class': ST0CKGStrategy,
@@ -101,6 +115,19 @@ class BotManager:
             # Create strategy instance
             strategy_class = config['strategy_class']
             strategy_args = config.get('strategy_args', {})
+            
+            # Special handling for gamma scalping
+            if strategy_class == 'gamma_scalping':
+                # Launch separate gamma scalping process
+                self.logger.info(f"Launching gamma scalping for {bot_id}")
+                import subprocess
+                gamma_process = subprocess.Popen([
+                    sys.executable, 
+                    'launch_gamma_scalping.py',
+                    '--log-level', args.log_level if 'args' in locals() else 'INFO'
+                ])
+                self.logger.info(f"Gamma scalping launched with PID: {gamma_process.pid}")
+                return
             
             # For ST0CKG, pass database and market data providers
             if strategy_class == ST0CKGStrategy:
@@ -189,10 +216,14 @@ async def main():
 Available bots:
   st0cka          - Simple SPY scalping ($0.01 profit target)
   st0cka_advanced - Advanced SPY scalping (multi-position)
+  st0cka_gamma    - Gamma scalping - Volatility-based SPY trading
+  st0cka_options  - True gamma scalping - SPY options straddles with delta hedging
   st0ckg          - Battle Lines 0-DTE options strategy
 
 Examples:
-  python main_unified.py st0cka               # Run single bot
+  python main_unified.py st0cka               # Run simple scalping
+  python main_unified.py st0cka_gamma         # Run volatility-based scalping
+  python main_unified.py st0cka_options       # Run true options gamma scalping
   python main_unified.py st0cka st0ckg        # Run multiple bots
   python main_unified.py --all                 # Run all bots
   python main_unified.py --list                # List available bots
