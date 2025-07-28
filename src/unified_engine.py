@@ -17,6 +17,8 @@ from .unified_market_data import UnifiedMarketData
 from .alpaca_broker import AlpacaBroker
 from .unified_risk_manager import UnifiedRiskManager
 from .error_reporter import ErrorReporter
+from .pdt_override import PDTManager
+from .day_trade_tracker import DayTradeTracker
 
 @dataclass
 class Position:
@@ -118,6 +120,15 @@ class UnifiedTradingEngine:
         self.broker = AlpacaBroker(api_key, api_secret, paper=paper_trading)
         self.market_data = UnifiedMarketData(self.broker, cache=self.cache)
         self.risk_manager = UnifiedRiskManager(self.db, self.broker)
+        
+        # PDT override for paper trading
+        self.pdt_manager = PDTManager(
+            min_account_value=2500.0,  # $2,500 minimum for paper trading
+            paper_trading_override=True
+        )
+        
+        # Day trade tracker
+        self.day_trade_tracker = DayTradeTracker(f"day_trades_{bot_id}.json")
         
         # Position tracking
         self.positions: Dict[str, Position] = {}
@@ -294,6 +305,22 @@ class UnifiedTradingEngine:
             account = await self.broker.get_account()
             account_value = float(account['equity'])
             
+            # Check PDT restrictions
+            is_paper = getattr(self.broker, 'paper', True)
+            
+            # For accounts under $25k, check day trade count
+            if account_value < 25000 and not self.day_trade_tracker.can_day_trade():
+                next_available = self.day_trade_tracker.get_next_available_date()
+                self.logger.warning(
+                    f"[{self.bot_id}] Cannot day trade - PDT limit reached. "
+                    f"Next slot available: {next_available.strftime('%Y-%m-%d %H:%M')}"
+                )
+                return
+            
+            if not self.pdt_manager.check_pdt_restriction(account_value, is_paper):
+                self.logger.warning(f"[{self.bot_id}] Trade blocked by PDT restriction. Account value: ${account_value:.2f}")
+                return
+            
             # Get position size from strategy
             position_size = self.strategy.get_position_size(signal, account_value)
             
@@ -398,6 +425,14 @@ class UnifiedTradingEngine:
                         self.daily_metrics['consecutive_losses'] += 1
                     else:
                         self.daily_metrics['consecutive_losses'] = 0
+                    
+                    # Track day trade if applicable
+                    if position.entry_time.date() == exit_time.date():
+                        self.day_trade_tracker.add_trade(
+                            position.symbol,
+                            position.entry_time,
+                            exit_time
+                        )
                     
                     # Remove position
                     del self.positions[position.id]
