@@ -38,15 +38,15 @@ class ST0CKAStrategy(TradingStrategy):
         self.min_volatility_spike = 1.2  # 20% above average
         self.pullback_pct = 0.003  # 0.3% pullback from high
         
-        # Trading windows
+        # Trading windows - trade all day
         self.morning_buy_start = "09:30"
-        self.morning_buy_end = "10:00"
-        self.morning_sell_start = "10:00"
-        self.morning_sell_end = "11:00"
-        self.power_buy_start = "15:00"
+        self.morning_buy_end = "15:30"  # Trade until 3:30 PM
+        self.morning_sell_start = "09:30"
+        self.morning_sell_end = "15:55"  # Can sell until 3:55 PM
+        self.power_buy_start = "09:30"  # No separate power hour
         self.power_buy_end = "15:30"
-        self.power_sell_start = "15:30"
-        self.power_sell_end = "15:45"
+        self.power_sell_start = "09:30"
+        self.power_sell_end = "15:55"
         
         # State tracking
         self.session_high = None
@@ -300,8 +300,8 @@ class ST0CKAStrategy(TradingStrategy):
                 'min_signals': 2
             },
             'trading_sessions': {
-                'morning': f"{self.morning_buy_start}-{self.morning_sell_end}",
-                'power_hour': f"{self.power_buy_start}-{self.power_sell_end}"
+                'all_day': f"{self.morning_buy_start}-{self.morning_buy_end}",
+                'sell_window': f"{self.morning_sell_start}-{self.morning_sell_end}"
             },
             'cycle_delay': 2,  # Faster checking for entry conditions
             'max_consecutive_losses': 3,
