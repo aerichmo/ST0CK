@@ -177,6 +177,19 @@ class ST0CKAStrategy(TradingStrategy):
                     'realized': self._calculate_volatility(returns),
                     'average': 15  # Baseline
                 }
+            else:
+                self.logger.warning(f"Insufficient bars data ({len(bars) if bars else 0} bars), using defaults")
+                # Use default values when no historical data available
+                data['technicals'] = {
+                    'rsi': 50,  # Neutral RSI
+                    'vwap': None,
+                    'high': None,
+                    'low': None,
+                    'volatility': {
+                        'realized': 15,
+                        'average': 15
+                    }
+                }
         except Exception as e:
             self.logger.error(f"Error getting technical data: {e}")
             
