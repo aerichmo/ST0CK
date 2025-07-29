@@ -238,50 +238,6 @@ class UnifiedMarketData:
         except Exception as e:
             self.logger.error(f"Failed to get bars for {symbol}: {e}")
             
-            # If IEX fails, try with a larger time window or older data
-            if "subscription does not permit" not in str(e) and "iex" in str(e).lower():
-                try:
-                    self.logger.info(f"Retrying with adjusted parameters for {symbol}")
-                    # Try getting data from further back
-                    now = datetime.now(self.eastern)
-                    start = now - timedelta(hours=2)  # Go back 2 hours instead
-                    
-                    request = StockBarsRequest(
-                        symbol_or_symbols=symbol,
-                        timeframe=timeframe,
-                        start=start,
-                        end=now,
-                        feed="iex"
-                    )
-                    
-                    loop = asyncio.get_event_loop()
-                    bars_data = await loop.run_in_executor(
-                        None,
-                        self.data_client.get_stock_bars,
-                        request
-                    )
-                    
-                    bars = []
-                    if symbol in bars_data:
-                        raw_bars = bars_data[symbol]
-                        for bar in raw_bars[-limit:]:  # Get last 'limit' bars
-                            bars.append({
-                                'timestamp': bar.timestamp,
-                                'open': float(bar.open),
-                                'high': float(bar.high),
-                                'low': float(bar.low),
-                                'close': float(bar.close),
-                                'volume': int(bar.volume),
-                                'vwap': float(bar.vwap) if hasattr(bar, 'vwap') else None
-                            })
-                    
-                    if bars:
-                        self.logger.info(f"Fallback succeeded: got {len(bars)} bars for {symbol}")
-                        return bars
-                        
-                except Exception as fallback_error:
-                    self.logger.error(f"Fallback also failed for {symbol}: {fallback_error}")
-            
         return None
     
     async def get_option_chain(self, 
