@@ -1,19 +1,18 @@
-# ST0CK - Automated Trading System
+# ST0CK - Battle Lines 0-DTE Options Trading System
 
-High-performance automated trading platform for stocks and options using Alpaca Markets API.
+High-performance automated options trading system using Alpaca Markets API.
 
-## 🚀 Active Strategy: ST0CKG
+## 🚀 Strategy: ST0CKG - Battle Lines 0-DTE
 
-### ✅ ST0CKG - Advanced Pattern Recognition (SPY Only)
-- **Strategy**: Multi-signal pattern recognition with 6 entry types
-- **Instrument**: SPY options only (0-DTE)
-- **Sessions** (Optimized for volatility): 
-  - Morning: 9:30-11:00 AM ET (40-45 delta options) - Highest volatility
-  - ~~Midday: 1:00-2:30 PM ET~~ - REMOVED (low volatility period)
-  - Power Hour: 3:00-3:45 PM ET (45-50 delta options) - Second volatility spike
-- **Capital**: $5,000
-- **Risk**: Dynamic 2-6% per trade (aggressive for small capital)
-- **Target**: 25-40% monthly returns
+### ✅ ST0CKG - Advanced Pattern Recognition (SPY Options)
+- **Strategy**: Battle Lines - Trading key support/resistance levels with 0-DTE options
+- **Instrument**: SPY options (0-DTE - same day expiration)
+- **Trading Windows**: 
+  - Morning Session: 9:30-11:00 AM ET (capture opening volatility)
+  - Position Management: Until 3:50 PM ET
+- **Risk Management**: 1% risk per trade with R-based targets
+- **Position Sizing**: Dynamic based on signal strength
+- **Exit Strategy**: Scale out at 1.5R, final target at 3R
 
 ## 🎯 Quick Start
 
@@ -35,10 +34,9 @@ python main_unified.py
 
 ```
 ST0CK/
-├── bots/                          # Trading strategies
-│   ├── st0ckg/                   # ST0CKG options strategy
-│   └── st0cka/                   # Simple stock strategy
 ├── src/
+│   ├── strategies/
+│   │   └── st0ckg_strategy.py    # Battle Lines 0-DTE options strategy
 │   ├── unified_engine.py         # Unified trading engine
 │   ├── unified_market_data.py    # Market data with caching & pooling
 │   ├── connection_pool.py        # API connection management

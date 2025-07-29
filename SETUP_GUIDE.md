@@ -53,8 +53,6 @@ Create a `.env` file in the project root:
 # Alpaca API Credentials
 ST0CKGKEY=your-alpaca-api-key       # For ST0CKG strategy
 ST0CKGSECRET=your-alpaca-secret-key
-ST0CKAKEY=your-alpaca-api-key       # For simple stock strategy
-ST0CKASECRET=your-alpaca-secret-key
 
 # Trading Configuration
 ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Paper trading
@@ -62,7 +60,6 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Paper trading
 
 # Capital Allocation (optional - uses account balance by default)
 ST0CKG_TRADING_CAPITAL=5000
-ST0CKA_TRADING_CAPITAL=100
 
 # Database
 DATABASE_URL=sqlite:///trading_multi.db

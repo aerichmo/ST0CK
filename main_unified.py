@@ -35,7 +35,7 @@ try:
     from src.unified_logging import configure_logging, get_logger
     from src.unified_database import UnifiedDatabaseManager
     from src.unified_engine import UnifiedTradingEngine
-    from src.strategies import ST0CKAStrategy, ST0CKAEnhancedStrategy, ST0CKGStrategy, ST0CKAGammaStrategy, ST0CKARealtimeStrategy
+    from src.strategies import ST0CKGStrategy
     from src.error_reporter import ErrorReporter
 except ImportError as e:
     with open('logs/import_error.log', 'w') as f:
@@ -50,65 +50,16 @@ except ImportError as e:
 
 # Bot Registry - Maps bot names to strategies
 BOT_REGISTRY = {
-    'st0cka': {
-        'strategy_class': ST0CKARealtimeStrategy,
-        'strategy_args': {'mode': 'realtime'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Real-time SPY scalping - Event-driven like gamma-scalping'
-    },
-    'st0cka_volatility': {
-        'strategy_class': ST0CKAEnhancedStrategy,
-        'strategy_args': {'mode': 'volatility'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Volatility-based SPY scalping - Dynamic sizing'
-    },
-    'st0cka_straddle': {
-        'strategy_class': ST0CKAEnhancedStrategy,
-        'strategy_args': {'mode': 'straddle'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Options straddles - Pure volatility harvesting'
-    },
-    'st0cka_adaptive': {
-        'strategy_class': ST0CKAEnhancedStrategy,
-        'strategy_args': {'mode': 'adaptive'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Adaptive strategy - Switches based on conditions'
-    },
-    'st0cka_advanced': {
-        'strategy_class': ST0CKAStrategy,
-        'strategy_args': {'mode': 'advanced'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Advanced SPY scalping - Multi-position'
-    },
-    'st0cka_gamma': {
-        'strategy_class': ST0CKAGammaStrategy,
-        'strategy_args': {'mode': 'gamma'},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'Gamma scalping - Volatility-based SPY trading'
-    },
-    'st0cka_options': {
-        'strategy_class': 'gamma_scalping',  # Special marker for gamma scalping
-        'strategy_args': {},
-        'api_key_env': 'ST0CKAKEY',
-        'secret_key_env': 'ST0CKASECRET',
-        'description': 'True gamma scalping - SPY options straddles with delta hedging'
-    },
     'st0ckg': {
         'strategy_class': ST0CKGStrategy,
         'strategy_args': {
-            'start_time': '09:30',  # Updated to capture full morning volatility
-            'end_time': '11:00',    # Extended to full opening drive window
+            'start_time': '09:30',  # Morning session start
+            'end_time': '11:00',    # Morning session end
             'max_positions': 2
         },
         'api_key_env': 'ST0CKGKEY',
         'secret_key_env': 'ST0CKGSECRET',
-        'description': 'Battle Lines 0-DTE options strategy - Morning & Power Hour'
+        'description': 'Battle Lines 0-DTE options strategy - Trading key support/resistance levels'
     }
 }
 
@@ -235,19 +186,10 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Available bots:
-  st0cka          - Simple SPY scalping ($0.01 profit target)
-  st0cka_advanced - Advanced SPY scalping (multi-position)
-  st0cka_gamma    - Gamma scalping - Volatility-based SPY trading
-  st0cka_options  - True gamma scalping - SPY options straddles with delta hedging
   st0ckg          - Battle Lines 0-DTE options strategy
 
 Examples:
-  python main_unified.py st0cka               # Run simple scalping
-  python main_unified.py st0cka_volatility    # Run with volatility-based sizing
-  python main_unified.py st0cka_straddle      # Run options straddles (Alpaca-style)
-  python main_unified.py st0cka_adaptive      # Run adaptive mode
-  python main_unified.py st0cka st0ckg        # Run multiple bots
-  python main_unified.py --all                 # Run all bots
+  python main_unified.py st0ckg                # Run Battle Lines 0-DTE options strategy
   python main_unified.py --list                # List available bots
         """
     )

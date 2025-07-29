@@ -14,13 +14,10 @@ if [ ! -f .env ]; then
 # Alpaca API Configuration
 ST0CKGKEY=your-stockg-key
 ST0CKGSECRET=your-stockg-secret
-ST0CKAKEY=your-stocka-key
-ST0CKASECRET=your-stocka-secret
 ALPACA_BASE_URL=https://api.alpaca.markets
 
 # Trading Capital
 ST0CKG_TRADING_CAPITAL=5000
-ST0CKA_TRADING_CAPITAL=10000
 
 # Database
 DATABASE_URL=sqlite:///trading_multi.db
