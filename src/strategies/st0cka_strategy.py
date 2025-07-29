@@ -161,14 +161,14 @@ class ST0CKAStrategy(TradingStrategy):
             if bars and len(bars) >= 14:
                 # Calculate RSI
                 data['technicals'] = {
-                    'rsi': self._calculate_rsi([b.close for b in bars]),
-                    'vwap': bars[-1].vwap if hasattr(bars[-1], 'vwap') else None,
-                    'high': max(b.high for b in bars[-20:]),
-                    'low': min(b.low for b in bars[-20:])
+                    'rsi': self._calculate_rsi([b['close'] for b in bars]),
+                    'vwap': bars[-1].get('vwap'),
+                    'high': max(b['high'] for b in bars[-20:]),
+                    'low': min(b['low'] for b in bars[-20:])
                 }
                 
                 # Get volatility
-                returns = [(bars[i].close - bars[i-1].close) / bars[i-1].close 
+                returns = [(bars[i]['close'] - bars[i-1]['close']) / bars[i-1]['close'] 
                           for i in range(1, len(bars))]
                 data['technicals']['volatility'] = {
                     'realized': self._calculate_volatility(returns),
