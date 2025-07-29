@@ -5,6 +5,7 @@ Waits for optimal entry conditions instead of buying immediately
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import pytz
+from alpaca.data.timeframe import TimeFrame
 
 from ..unified_engine import TradingStrategy, Position
 from ..unified_logging import get_logger
@@ -155,7 +156,7 @@ class ST0CKAStrategy(TradingStrategy):
         
         try:
             # Get recent bars for calculations
-            bars = await market_data_provider.get_bars('SPY', timeframe='1Min', limit=20)
+            bars = await market_data_provider.get_bars('SPY', timeframe=TimeFrame.Minute, limit=20)
             
             if bars and len(bars) >= 14:
                 # Calculate RSI
