@@ -113,7 +113,7 @@ class UnifiedTradingEngine:
         self.logger = get_logger(__name__, bot_id)
         
         # Initialize components
-        self.db = UnifiedDatabaseManager(database_url, bot_id)
+        self.db = UnifiedDatabaseManager(database_url)
         self.cache = UnifiedCache(redis_url, bot_id)
         self.broker = AlpacaBroker(api_key, api_secret, paper=paper_trading)
         self.market_data = UnifiedMarketData(self.broker, cache=self.cache)
