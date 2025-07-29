@@ -14,6 +14,26 @@ from .unified_logging import get_logger
 
 Base = declarative_base()
 
+# Battle Lines Table - For ST0CKG strategy
+class BattleLines(Base):
+    __tablename__ = 'battle_lines'
+    
+    id = Column(String, primary_key=True)  # Format: {bot_id}_{symbol}_{date}
+    bot_id = Column(String, nullable=False)
+    symbol = Column(String, nullable=False)
+    date = Column(DateTime, nullable=False)
+    pdh = Column(Float, nullable=False)  # Previous day high
+    pdl = Column(Float, nullable=False)  # Previous day low
+    overnight_high = Column(Float, nullable=False)
+    overnight_low = Column(Float, nullable=False)
+    premarket_high = Column(Float, nullable=False)
+    premarket_low = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    __table_args__ = (
+        Index('idx_battle_lines_lookup', 'bot_id', 'symbol', 'date'),
+    )
+
 # Stock Trades Table - For ST0CKA and stock strategies
 class StockTrade(Base):
     __tablename__ = 'stock_trades'
@@ -419,3 +439,62 @@ class UnifiedDatabaseManager:
             self.engine.dispose()
         except Exception as e:
             self.logger.error(f"Error closing database: {e}")
+
+
+# Standalone functions for battle lines compatibility
+def get_latest_battle_lines(db_manager, symbol: str = 'SPY', bot_id: str = 'st0ckg') -> Optional[Dict[str, float]]:
+    """
+    Get the latest battle lines for a symbol
+    Returns dict with pdh, pdl, overnight_high, overnight_low, premarket_high, premarket_low
+    """
+    try:
+        with db_manager.get_session() as session:
+            today = datetime.now().date()
+            battle_line = session.query(BattleLines).filter(
+                BattleLines.bot_id == bot_id,
+                BattleLines.symbol == symbol,
+                BattleLines.date == today
+            ).first()
+            
+            if battle_line:
+                return {
+                    'pdh': battle_line.pdh,
+                    'pdl': battle_line.pdl,
+                    'overnight_high': battle_line.overnight_high,
+                    'overnight_low': battle_line.overnight_low,
+                    'premarket_high': battle_line.premarket_high,
+                    'premarket_low': battle_line.premarket_low
+                }
+            return None
+    except Exception as e:
+        db_manager.logger.error(f"Error getting battle lines: {e}")
+        return None
+
+
+def save_battle_lines(db_manager, bot_id: str, symbol: str, battle_lines: Dict[str, float]):
+    """
+    Save battle lines to the database
+    """
+    try:
+        with db_manager.get_session() as session:
+            today = datetime.now().date()
+            battle_line = BattleLines(
+                id=f"{bot_id}_{symbol}_{today}",
+                bot_id=bot_id,
+                symbol=symbol,
+                date=today,
+                pdh=battle_lines['pdh'],
+                pdl=battle_lines['pdl'],
+                overnight_high=battle_lines['overnight_high'],
+                overnight_low=battle_lines['overnight_low'],
+                premarket_high=battle_lines['premarket_high'],
+                premarket_low=battle_lines['premarket_low']
+            )
+            # Use merge to update if exists
+            session.merge(battle_line)
+            session.commit()
+            db_manager.logger.info(f"Saved battle lines for {symbol} on {today}")
+            return True
+    except Exception as e:
+        db_manager.logger.error(f"Error saving battle lines: {e}")
+        return False
