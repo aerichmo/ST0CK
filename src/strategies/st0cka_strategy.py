@@ -5,7 +5,7 @@ Waits for optimal entry conditions instead of buying immediately
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import pytz
-from alpaca.data.timeframe import TimeFrame
+from collections import deque
 
 from ..unified_engine import TradingStrategy, Position
 from ..unified_logging import get_logger
@@ -55,6 +55,11 @@ class ST0CKAStrategy(TradingStrategy):
         self.last_entry_time = None
         self.entry_cooldown = 60  # seconds between entries
         self.max_positions = 1
+        
+        # Real-time price tracking
+        self.price_history = deque(maxlen=20)  # Track last 20 quotes
+        self.last_price = None
+        self.price_momentum = 0
     
     def check_entry_conditions(self, market_data: Dict[str, Any], positions: Dict[str, Position]) -> Optional[Dict[str, Any]]:
         """
@@ -74,60 +79,51 @@ class ST0CKAStrategy(TradingStrategy):
             if (now - self.last_entry_time).total_seconds() < self.entry_cooldown:
                 return None
         
-        spy_price = market_data.get('spy_price')
+        # Get quote and technical data
+        quote = market_data.get('quote', {})
+        technicals = market_data.get('technicals', {})
+        
+        spy_price = technicals.get('current_price') or market_data.get('spy_price')
         if not spy_price:
             return None
             
-        # Get technical indicators
-        technicals = market_data.get('technicals', {})
-        rsi = technicals.get('rsi')
-        vwap = technicals.get('vwap')
-        volatility = technicals.get('volatility', {})
-        intraday_high = technicals.get('high')
-        intraday_low = technicals.get('low')
+        # Get real-time indicators
+        price_momentum = technicals.get('price_momentum', 0)
+        volatility = technicals.get('volatility', 0)
+        session_high = technicals.get('session_high')
+        session_low = technicals.get('session_low')
+        spread = technicals.get('spread', 0)
         
-        # Track session extremes
-        if intraday_high:
-            self.session_high = max(self.session_high or 0, intraday_high)
-        if intraday_low:
-            self.session_low = min(self.session_low or float('inf'), intraday_low)
-        
-        # Check for entry signals
+        # Check for entry signals based on real-time data
         entry_signals = []
         signal_strength = 0
         
-        # 1. RSI Oversold Bounce
-        if rsi and self.last_rsi:
-            if self.last_rsi < self.rsi_oversold and rsi > self.rsi_oversold:
-                entry_signals.append("RSI oversold bounce")
+        # 1. Pullback from session high
+        if session_high and session_high > spy_price:
+            pullback_pct = (session_high - spy_price) / session_high
+            if pullback_pct >= self.pullback_pct:
+                entry_signals.append(f"Pullback from high ({pullback_pct:.2%})")
                 signal_strength += 3
         
-        # 2. VWAP Pullback
-        if vwap and spy_price < vwap * (1 - self.vwap_distance_pct):
-            distance_pct = (vwap - spy_price) / vwap
-            entry_signals.append(f"VWAP pullback ({distance_pct:.2%} below)")
+        # 2. Momentum reversal (using real-time price momentum)
+        if price_momentum < -0.0005 and volatility > 0.1:
+            entry_signals.append(f"Momentum reversal (momentum: {price_momentum:.4f})")
             signal_strength += 2
         
         # 3. Support Test
-        if self.session_low and spy_price <= self.session_low * 1.001:  # Within 0.1% of low
+        if session_low and spy_price <= session_low * 1.001:  # Within 0.1% of low
             entry_signals.append("Testing session low support")
             signal_strength += 2
         
-        # 4. Volatility Spike
-        current_vol = volatility.get('realized', 0)
-        avg_vol = volatility.get('average', 15)
-        if current_vol > avg_vol * self.min_volatility_spike:
-            entry_signals.append(f"Volatility spike ({current_vol:.1f}% vs {avg_vol:.1f}%)")
+        # 4. Volatility with positive momentum
+        if volatility > 0.2 and price_momentum > 0:
+            entry_signals.append(f"High volatility with positive momentum (vol: {volatility:.2f}%)")
             signal_strength += 1
         
-        # 5. Pullback from High
-        if self.session_high and spy_price < self.session_high * (1 - self.pullback_pct):
-            pullback = (self.session_high - spy_price) / self.session_high
-            entry_signals.append(f"Pullback from high ({pullback:.2%})")
-            signal_strength += 1
-        
-        # Store current RSI for next check
-        self.last_rsi = rsi
+        # 5. Support bounce (price near session low with positive momentum)
+        if session_low and spy_price <= session_low * 1.005 and price_momentum > 0:
+            entry_signals.append(f"Support bounce (momentum: {price_momentum:.4f})")
+            signal_strength += 2
         
         # Need at least 2 signals or strength >= 3
         if len(entry_signals) >= 2 or signal_strength >= 3:
@@ -146,52 +142,64 @@ class ST0CKAStrategy(TradingStrategy):
         
         # Log why we're not entering (helpful for debugging)
         if now.second % 30 == 0:  # Log every 30 seconds
-            self.logger.debug(f"Waiting for entry: Price=${spy_price:.2f}, RSI={rsi}, Signals={len(entry_signals)}")
+            self.logger.debug(f"Waiting for entry: Price=${spy_price:.2f}, Momentum={price_momentum:.4f}, Vol={volatility:.2f}%, Signals={len(entry_signals)}")
         
         return None
     
     async def get_required_market_data(self, market_data_provider) -> Dict[str, Any]:
-        """Get technical indicators for smart entry"""
+        """Get real-time quote data for smart entry"""
         data = {}
         
         try:
-            self.logger.info("ST0CKA: Starting to get market data")
-            # Get recent bars for calculations
-            self.logger.info("ST0CKA: Calling get_bars for SPY")
-            bars = await market_data_provider.get_bars('SPY', timeframe=TimeFrame.Minute, limit=20)
-            self.logger.info(f"ST0CKA: get_bars returned {len(bars) if bars else 0} bars")
+            # Get current quote for SPY
+            quote = await market_data_provider.get_quote('SPY')
             
-            if bars and len(bars) >= 14:
-                # Calculate RSI
+            if quote:
+                current_price = quote.get('price', 0)
+                bid = quote.get('bid_price', current_price)
+                ask = quote.get('ask_price', current_price)
+                spread = ask - bid
+                
+                # Update price history
+                if current_price > 0:
+                    self.price_history.append(current_price)
+                    
+                    # Update session high/low
+                    if self.session_high is None or current_price > self.session_high:
+                        self.session_high = current_price
+                    if self.session_low is None or current_price < self.session_low:
+                        self.session_low = current_price
+                    
+                    # Calculate price momentum
+                    if self.last_price:
+                        self.price_momentum = (current_price - self.last_price) / self.last_price
+                    self.last_price = current_price
+                
+                # Calculate simple technical indicators from price history
+                volatility = 0
+                if len(self.price_history) > 1:
+                    price_changes = [(self.price_history[i] - self.price_history[i-1]) / self.price_history[i-1] 
+                                   for i in range(1, len(self.price_history))]
+                    if price_changes:
+                        volatility = sum(abs(pc) for pc in price_changes) / len(price_changes) * 100
+                
+                data['quote'] = quote
                 data['technicals'] = {
-                    'rsi': self._calculate_rsi([b['close'] for b in bars]),
-                    'vwap': bars[-1].get('vwap'),
-                    'high': max(b['high'] for b in bars[-20:]),
-                    'low': min(b['low'] for b in bars[-20:])
+                    'current_price': current_price,
+                    'bid': bid,
+                    'ask': ask,
+                    'spread': spread,
+                    'session_high': self.session_high,
+                    'session_low': self.session_low,
+                    'price_momentum': self.price_momentum,
+                    'volatility': volatility,
+                    'price_history_len': len(self.price_history)
                 }
                 
-                # Get volatility
-                returns = [(bars[i]['close'] - bars[i-1]['close']) / bars[i-1]['close'] 
-                          for i in range(1, len(bars))]
-                data['technicals']['volatility'] = {
-                    'realized': self._calculate_volatility(returns),
-                    'average': 15  # Baseline
-                }
-            else:
-                self.logger.warning(f"Insufficient bars data ({len(bars) if bars else 0} bars), using defaults")
-                # Use default values when no historical data available
-                data['technicals'] = {
-                    'rsi': 50,  # Neutral RSI
-                    'vwap': None,
-                    'high': None,
-                    'low': None,
-                    'volatility': {
-                        'realized': 15,
-                        'average': 15
-                    }
-                }
+                self.logger.debug(f"ST0CKA: Price ${current_price:.2f}, Momentum: {self.price_momentum:.4f}, Vol: {volatility:.2f}%")
+                
         except Exception as e:
-            self.logger.error(f"Error getting technical data: {e}")
+            self.logger.error(f"Error getting quote data: {e}")
             
         return data
     
@@ -254,7 +262,8 @@ class ST0CKAStrategy(TradingStrategy):
         
         # Get current indicators
         technicals = market_data.get('technicals', {})
-        rsi = technicals.get('rsi')
+        current_price = technicals.get('current_price', 0)
+        price_momentum = technicals.get('price_momentum', 0)
         
         # Dynamic profit target
         profit_target = self._calculate_profit_target(position.avg_price)
@@ -263,9 +272,9 @@ class ST0CKAStrategy(TradingStrategy):
         if position.unrealized_pnl and position.unrealized_pnl >= profit_target:
             return "profit_target"
         
-        # 2. RSI overbought (take profits early)
-        if rsi and rsi > self.rsi_overbought and position.unrealized_pnl > 0:
-            return "rsi_overbought"
+        # 2. Momentum reversal (take profits on negative momentum)
+        if price_momentum < -0.001 and position.unrealized_pnl > 0:
+            return "momentum_reversal"
         
         # 3. Stop loss
         stop_loss = -profit_target * 1.5
@@ -302,7 +311,7 @@ class ST0CKAStrategy(TradingStrategy):
     
     def get_exit_order_params(self, position: Position, exit_reason: str) -> Dict[str, Any]:
         """Get exit order parameters"""
-        if exit_reason in ["profit_target", "rsi_overbought"]:
+        if exit_reason in ["profit_target", "momentum_reversal"]:
             # Use limit order for profit taking
             target_price = position.avg_price + self._calculate_profit_target(position.avg_price)
             return {
