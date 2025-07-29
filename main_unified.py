@@ -35,7 +35,7 @@ try:
     from src.unified_logging import configure_logging, get_logger
     from src.unified_database import UnifiedDatabaseManager
     from src.unified_engine import UnifiedTradingEngine
-    from src.strategies import ST0CKAStrategy, ST0CKAEnhancedStrategy, ST0CKGStrategy, ST0CKAGammaStrategy
+    from src.strategies import ST0CKAStrategy, ST0CKAEnhancedStrategy, ST0CKGStrategy, ST0CKAGammaStrategy, ST0CKARealtimeStrategy
     from src.error_reporter import ErrorReporter
 except ImportError as e:
     with open('logs/import_error.log', 'w') as f:
@@ -51,11 +51,11 @@ except ImportError as e:
 # Bot Registry - Maps bot names to strategies
 BOT_REGISTRY = {
     'st0cka': {
-        'strategy_class': ST0CKAStrategy,
-        'strategy_args': {'mode': 'simple'},
+        'strategy_class': ST0CKARealtimeStrategy,
+        'strategy_args': {'mode': 'realtime'},
         'api_key_env': 'ST0CKAKEY',
         'secret_key_env': 'ST0CKASECRET',
-        'description': 'Smart entry SPY scalping - Waits for optimal conditions'
+        'description': 'Real-time SPY scalping - Event-driven like gamma-scalping'
     },
     'st0cka_volatility': {
         'strategy_class': ST0CKAEnhancedStrategy,
