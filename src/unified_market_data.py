@@ -82,7 +82,9 @@ class UnifiedMarketData:
             # For options, use the broker's get_option_quote method
             try:
                 async with self.rate_limiter:
-                    quote_data = await asyncio.to_thread(
+                    loop = asyncio.get_event_loop()
+                    quote_data = await loop.run_in_executor(
+                        None,
                         self.broker.get_option_quote,
                         symbol
                     )
@@ -111,9 +113,11 @@ class UnifiedMarketData:
         # Stock quotes
         try:
             async with self.rate_limiter:
-                # Use asyncio.to_thread for sync API calls
+                # Use run_in_executor for sync API calls
                 request = StockQuotesRequest(symbol_or_symbols=symbol, feed="iex")
-                quotes = await asyncio.to_thread(
+                loop = asyncio.get_event_loop()
+                quotes = await loop.run_in_executor(
+                    None,
                     self.data_client.get_stock_latest_quote,
                     request
                 )
@@ -165,14 +169,19 @@ class UnifiedMarketData:
         Returns:
             List of bar dictionaries
         """
+        self.logger.info(f"get_bars called for {symbol}, timeframe={timeframe}, limit={limit}")
+        
         # Check cache
         cache_key = CacheKeyBuilder.bars(symbol, str(timeframe))
         cached = self.cache.get(cache_key)
         if cached:
+            self.logger.info(f"Returning cached bars for {symbol}")
             return cached
         
         try:
+            self.logger.info(f"Acquiring rate limiter for {symbol} bars")
             async with self.rate_limiter:
+                self.logger.info(f"Rate limiter acquired, preparing request for {symbol}")
                 now = datetime.now(self.eastern)
                 start = now - timedelta(minutes=limit)
                 
@@ -184,10 +193,14 @@ class UnifiedMarketData:
                     feed="iex"
                 )
                 
-                bars_data = await asyncio.to_thread(
+                self.logger.info(f"Calling get_stock_bars for {symbol} via run_in_executor")
+                loop = asyncio.get_event_loop()
+                bars_data = await loop.run_in_executor(
+                    None,
                     self.data_client.get_stock_bars,
                     request
                 )
+                self.logger.info(f"get_stock_bars returned for {symbol}")
                 
                 bars = []
                 if symbol in bars_data:
@@ -239,7 +252,9 @@ class UnifiedMarketData:
         try:
             async with self.rate_limiter:
                 # Get option contracts from broker
-                contracts = await asyncio.to_thread(
+                loop = asyncio.get_event_loop()
+                contracts = await loop.run_in_executor(
+                    None, 
                     self.broker.get_option_contracts,
                     symbol,
                     expiration,
@@ -325,7 +340,8 @@ class UnifiedMarketData:
                 # Get quotes concurrently for this batch
                 tasks = []
                 for symbol in batch:
-                    task = asyncio.to_thread(self.broker.get_option_quote, symbol)
+                    loop = asyncio.get_event_loop()
+                    task = loop.run_in_executor(None, self.broker.get_option_quote, symbol)
                     tasks.append(task)
                 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -362,7 +378,9 @@ class UnifiedMarketData:
         try:
             async with self.rate_limiter:
                 # Get option snapshot from broker
-                snapshot = await asyncio.to_thread(
+                loop = asyncio.get_event_loop()
+                snapshot = await loop.run_in_executor(
+                    None, 
                     self.broker.get_option_snapshot,
                     option_symbol
                 )

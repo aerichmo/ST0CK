@@ -155,8 +155,11 @@ class ST0CKAStrategy(TradingStrategy):
         data = {}
         
         try:
+            self.logger.info("ST0CKA: Starting to get market data")
             # Get recent bars for calculations
+            self.logger.info("ST0CKA: Calling get_bars for SPY")
             bars = await market_data_provider.get_bars('SPY', timeframe=TimeFrame.Minute, limit=20)
+            self.logger.info(f"ST0CKA: get_bars returned {len(bars) if bars else 0} bars")
             
             if bars and len(bars) >= 14:
                 # Calculate RSI
