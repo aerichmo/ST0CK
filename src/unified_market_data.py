@@ -114,7 +114,7 @@ class UnifiedMarketData:
         try:
             async with self.rate_limiter:
                 # Use run_in_executor for sync API calls
-                request = StockQuotesRequest(symbol_or_symbols=symbol, feed="iex")
+                request = StockQuotesRequest(symbol_or_symbols=symbol)
                 loop = asyncio.get_event_loop()
                 quotes = await loop.run_in_executor(
                     None,
@@ -185,12 +185,14 @@ class UnifiedMarketData:
                 now = datetime.now(self.eastern)
                 start = now - timedelta(minutes=limit)
                 
+                self.logger.info(f"Time range: {start} to {now} (Eastern)")
+                self.logger.info(f"Feed: default, Timeframe: {timeframe}")
+                
                 request = StockBarsRequest(
                     symbol_or_symbols=symbol,
                     timeframe=timeframe,
                     start=start,
-                    end=now,
-                    feed="iex"
+                    end=now
                 )
                 
                 self.logger.info(f"Calling get_stock_bars for {symbol} via run_in_executor")
@@ -202,9 +204,15 @@ class UnifiedMarketData:
                 )
                 self.logger.info(f"get_stock_bars returned for {symbol}")
                 
+                # Log the raw response
+                self.logger.info(f"Raw bars_data type: {type(bars_data)}")
+                self.logger.info(f"Raw bars_data keys: {bars_data.keys() if hasattr(bars_data, 'keys') else 'No keys'}")
+                
                 bars = []
                 if symbol in bars_data:
-                    for bar in bars_data[symbol]:
+                    raw_bars = bars_data[symbol]
+                    self.logger.info(f"Found {len(raw_bars)} bars for {symbol}")
+                    for bar in raw_bars:
                         bars.append({
                             'timestamp': bar.timestamp,
                             'open': float(bar.open),
@@ -214,6 +222,10 @@ class UnifiedMarketData:
                             'volume': int(bar.volume),
                             'vwap': float(bar.vwap) if hasattr(bar, 'vwap') else None
                         })
+                else:
+                    self.logger.warning(f"Symbol {symbol} not found in bars_data")
+                
+                self.logger.info(f"Returning {len(bars)} processed bars for {symbol}")
                 
                 # Cache the result
                 if bars:
