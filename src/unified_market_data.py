@@ -129,6 +129,8 @@ class UnifiedMarketData:
                         'price': float(quote.ask_price + quote.bid_price) / 2,
                         'bid': float(quote.bid_price),
                         'ask': float(quote.ask_price),
+                        'bid_price': float(quote.bid_price),  # Add both formats
+                        'ask_price': float(quote.ask_price),  # Add both formats
                         'bid_size': int(quote.bid_size),
                         'ask_size': int(quote.ask_size),
                         'timestamp': quote.timestamp

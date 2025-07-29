@@ -220,6 +220,14 @@ class UnifiedTradingEngine:
     async def _run_trading_cycle(self):
         """Run one trading cycle"""
         with LogContext(self.logger, bot_id=self.bot_id, cycle_start=datetime.now()):
+            # Log cycle start every 10 cycles
+            if not hasattr(self, '_cycle_count'):
+                self._cycle_count = 0
+            self._cycle_count += 1
+            
+            if self._cycle_count % 10 == 1:
+                self.logger.info(f"[{self.bot_id}] Trading cycle #{self._cycle_count}, Market open: {self._is_market_open()}, In trading window: {self._in_trading_window()}")
+            
             # Update positions
             await self._update_positions()
             
@@ -229,6 +237,10 @@ class UnifiedTradingEngine:
             # Check entries if within trading window
             if self._in_trading_window():
                 await self._check_entries()
+            else:
+                # Log once per minute when outside window
+                if self._cycle_count % 12 == 1:  # Assuming 5 second cycles
+                    self.logger.debug(f"[{self.bot_id}] Outside trading window")
             
             # Monitor open positions
             await self._monitor_positions()

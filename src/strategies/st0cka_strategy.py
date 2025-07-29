@@ -196,7 +196,7 @@ class ST0CKAStrategy(TradingStrategy):
                     'price_history_len': len(self.price_history)
                 }
                 
-                self.logger.debug(f"ST0CKA: Price ${current_price:.2f}, Momentum: {self.price_momentum:.4f}, Vol: {volatility:.2f}%")
+                self.logger.info(f"ST0CKA: Price ${current_price:.2f}, Momentum: {self.price_momentum:.4f}, Vol: {volatility:.2f}%, History: {len(self.price_history)} quotes")
                 
         except Exception as e:
             self.logger.error(f"Error getting quote data: {e}")
