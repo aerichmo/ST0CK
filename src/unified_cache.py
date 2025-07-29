@@ -62,7 +62,7 @@ class UnifiedCache:
     """
     
     # Default TTL values (in seconds)
-    TTL_QUOTES = 5
+    TTL_QUOTES = 1  # Reduce to 1 second for real-time quotes
     TTL_OPTIONS = 60
     TTL_SNAPSHOTS = 30
     TTL_BARS = 300

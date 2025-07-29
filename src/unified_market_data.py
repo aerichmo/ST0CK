@@ -73,6 +73,8 @@ class UnifiedMarketData:
         cache_key = CacheKeyBuilder.quote(symbol)
         cached = self.cache.get(cache_key)
         if cached:
+            # Log cache hit for debugging
+            self.logger.debug(f"Using cached quote for {symbol}")
             return cached
         
         # Check if this is an option symbol (contains numbers after letter indicating strike)

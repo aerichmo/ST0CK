@@ -141,8 +141,8 @@ class ST0CKAStrategy(TradingStrategy):
             }
         
         # Log why we're not entering (helpful for debugging)
-        if now.second % 30 == 0:  # Log every 30 seconds
-            self.logger.debug(f"Waiting for entry: Price=${spy_price:.2f}, Momentum={price_momentum:.4f}, Vol={volatility:.2f}%, Signals={len(entry_signals)}")
+        if now.second % 10 == 0:  # Log every 10 seconds
+            self.logger.info(f"Checking entry: Price=${spy_price:.2f}, High=${session_high:.2f if session_high else 0}, Low=${session_low:.2f if session_low else 0}, Momentum={price_momentum:.4f}, Vol={volatility:.2f}%, Signals={len(entry_signals)}")
         
         return None
     
@@ -196,7 +196,7 @@ class ST0CKAStrategy(TradingStrategy):
                     'price_history_len': len(self.price_history)
                 }
                 
-                self.logger.info(f"ST0CKA: Price ${current_price:.2f}, Momentum: {self.price_momentum:.4f}, Vol: {volatility:.2f}%, History: {len(self.price_history)} quotes")
+                self.logger.info(f"ST0CKA: Price ${current_price:.2f}, Bid: ${bid:.2f}, Ask: ${ask:.2f}, Spread: ${spread:.2f}, Momentum: {self.price_momentum:.4f}, Vol: {volatility:.2f}%")
                 
         except Exception as e:
             self.logger.error(f"Error getting quote data: {e}")
