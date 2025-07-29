@@ -383,7 +383,7 @@ class ST0CKGStrategy(TradingStrategy):
                     
                     # Save to database
                     if self.db_manager:
-                        save_battle_lines(self.db_manager, battle_lines)
+                        save_battle_lines(self.db_manager, 'st0ckg', 'SPY', battle_lines)
     
     async def _calculate_battle_lines(self) -> Optional[Dict[str, float]]:
         """Calculate battle lines from market data"""
