@@ -1,18 +1,17 @@
 """
-Unified trading engine that supports multiple strategies
-Preserves core ST0CKA and ST0CKG strategies while eliminating duplication
+Unified trading engine for ST0CKG Battle Lines strategy
+Provides async execution, risk management, and position tracking
 """
 import asyncio
-import time
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import pytz
 
-from .unified_logging import get_logger, LogContext, log_performance
+from .unified_logging import get_logger, LogContext
 from .unified_database import UnifiedDatabaseManager
-from .unified_cache import UnifiedCache, CacheKeyBuilder
+from .unified_cache import UnifiedCache
 from .unified_market_data import UnifiedMarketData
 from .alpaca_broker import AlpacaBroker
 from .unified_risk_manager import UnifiedRiskManager

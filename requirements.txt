@@ -1,32 +1,21 @@
-# Core trading dependencies - LEAN & FAST
-alpaca-py==0.33.1              # Alpaca API with options support
-numpy==1.26.2                  # Numerical operations
+# ST0CKG Battle Lines Trading System Dependencies
 
-# Optional dependencies (for advanced features)
-# pandas==2.1.4                # Data manipulation (only if using legacy modules)
+# Core Trading
+alpaca-py==0.33.1              # Alpaca API with options support
 
 # Database
 sqlalchemy==2.0.23             # ORM
 psycopg2-binary==2.9.9         # PostgreSQL driver
-redis==5.0.1                   # High-performance caching (includes async support)
+redis==5.0.1                   # Caching with async support
 
-# Essential utilities
+# Essential Utilities
 python-dotenv==1.0.0           # Environment variables
 pytz==2023.3.post1             # Timezone handling
-cachetools==5.3.2              # High-performance caching
 
 # Logging & Monitoring
 python-json-logger==2.0.7      # Structured JSON logging
-sentry-sdk==1.39.1            # Error tracking
+sentry-sdk==1.39.1             # Error tracking (optional)
 
-# Technical analysis
-ta==0.11.0                     # Technical indicators
-
-# Web API (optional for dashboard)
-flask==3.0.0                   # Python API server
-flask-cors==4.0.0              # CORS support
-gunicorn==21.2.0               # Production WSGI server
-
-# Additional dependencies that might be missing
-requests==2.31.0               # HTTP library (for API calls)
-urllib3==2.1.0                 # HTTP client (dependency)
+# HTTP
+requests==2.31.0               # HTTP library
+urllib3==2.1.0                 # HTTP client

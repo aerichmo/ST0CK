@@ -30,23 +30,24 @@ cp .env.example .env
 python main_unified.py
 ```
 
-## 🏗️ Architecture
+## 🏗️ Project Structure
 
 ```
 ST0CK/
+├── main_unified.py               # Main entry point
 ├── src/
 │   ├── strategies/
-│   │   └── st0ckg_strategy.py    # Battle Lines 0-DTE options strategy
-│   ├── unified_engine.py         # Unified trading engine
-│   ├── unified_market_data.py    # Market data with caching & pooling
-│   ├── connection_pool.py        # API connection management
+│   │   └── st0ckg_strategy.py    # Battle Lines 0-DTE strategy
+│   ├── unified_engine.py         # Trading engine core
+│   ├── unified_market_data.py    # Real-time market data
 │   ├── alpaca_broker.py          # Order execution
-│   ├── unified_database.py       # Unified database manager
-│   └── risk_manager.py           # Risk management
-├── public/                       # Web dashboards
-│   ├── index.html               # Performance dashboard
-│   └── metrics.html             # System metrics
-└── main_unified.py              # Unified launcher
+│   ├── unified_database.py       # Trade & position tracking
+│   ├── unified_risk_manager.py   # Risk management
+│   ├── options_selector.py       # Options contract selection
+│   ├── st0ckg_signals.py         # Signal detection logic
+│   └── trend_filter_native.py    # Trend analysis
+├── requirements.txt              # Python dependencies
+└── .env.example                  # Configuration template
 ```
 
 ## 📊 ST0CKG Signal Types

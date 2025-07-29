@@ -174,8 +174,7 @@ class ST0CKGStrategy(TradingStrategy):
             return None
         
         # Get quality-adjusted quote if using IEX data
-        # Note: For now, we'll skip quality adjustment in sync context
-        # TODO: Make check_entry_conditions async or add sync version of get_quality_quote
+        # Note: Quality adjustment is handled in the data_quality_manager if enabled
         
         # Set pre-fetched options if available
         if 'option_chains' in market_data:

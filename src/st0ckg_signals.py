@@ -5,7 +5,6 @@ Implements all 6 signal types for Battle Lines strategy
 import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +405,8 @@ class ST0CKGSignalDetector:
                 return {'score': 0, 'details': 'Insufficient data', 'confidence': 'LOW'}
             
             # Look for volume spikes at specific price levels
-            avg_volume = np.mean([bar['volume'] for bar in recent_bars[:-1]])
+            volumes = [bar['volume'] for bar in recent_bars[:-1]]
+            avg_volume = sum(volumes) / len(volumes) if volumes else 0
             
             # Identify potential dark pool prints
             dark_pool_levels = []
