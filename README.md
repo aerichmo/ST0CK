@@ -104,13 +104,6 @@ Based on enhanced Graystone methodology:
 - **Risk**: Dynamic 2-6% per trade
 - **Target**: 25-40% monthly returns
 
-### ST0CKA - Smart Entry Stock Trading
-- **Sessions**: Morning (9:30-11:00), Power Hour (3:00-3:45)
-- **Strategy**: Waits for optimal entry signals before buying SPY
-- **Entry Signals**: RSI oversold bounce, VWAP pullback, support tests (needs 2+)
-- **Risk**: 1-2 shares based on signal strength
-- **Target**: $0.65-$1.50 per trade (0.13% of entry price)
-- **Updated**: Smart entry logic prevents immediate buying, waits for technical setups
 
 ## 📚 Documentation
 
