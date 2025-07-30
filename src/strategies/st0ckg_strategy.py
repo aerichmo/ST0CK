@@ -368,7 +368,8 @@ class ST0CKGStrategy(TradingStrategy):
             # Try to get from database first
             if self.db_manager:
                 saved_lines = get_latest_battle_lines(self.db_manager)
-                if saved_lines and saved_lines['timestamp'].date() == now.date():
+                if saved_lines:
+                    # Battle lines from DB are already for today (filtered by date in query)
                     self.battle_lines = saved_lines
                     self.last_battle_lines_update = now
                     return
