@@ -558,9 +558,10 @@ class AlpacaBroker(BrokerInterface):
                         quote = quotes[symbol]
                         if quote.bid_price and quote.ask_price and quote.bid_price > 0 and quote.ask_price > 0:
                             current_price = float(quote.bid_price + quote.ask_price) / 2
-                            # Set bounds to +/- 10% of current price for 0-DTE options
-                            strike_price_min = current_price * 0.90
-                            strike_price_max = current_price * 1.10
+                            # Set bounds to +/- 1.5% of current price for 0-DTE options (3% total range)
+                            # Based on professional 0-DTE trading standards
+                            strike_price_min = current_price * 0.985
+                            strike_price_max = current_price * 1.015
                             logger.info(f"Setting strike bounds for {symbol}: ${strike_price_min:.2f} - ${strike_price_max:.2f} (current: ${current_price:.2f})")
                 except Exception as e:
                     logger.debug(f"Could not get current price for strike bounds: {e}")
