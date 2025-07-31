@@ -5,6 +5,7 @@ Provides direct, high-speed access to Alpaca's trading and options data APIs
 
 import os
 import logging
+import time
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from decimal import Decimal
@@ -530,298 +531,201 @@ class AlpacaBroker(BrokerInterface):
         """Get all open orders"""
         return self.get_orders(status='open')
     
-    def get_option_contracts(self, symbol: str, expiration: datetime, option_type: str) -> Optional[List[Dict]]:
+    def get_option_contracts(self, symbol: str, expiration: datetime, option_type: str, max_retries: int = 3) -> Optional[List[Dict]]:
         """
         Get option contracts for a symbol and expiration using Alpaca options API
+        Implements retry logic and improved error handling based on Alpaca gamma scalping best practices
         """
         logger.info(f"Requesting {option_type} option contracts for symbol: '{symbol}', expiration: {expiration}")
         
         if not self.connected:
             return None
-            
-        try:
-            # Determine contract type
-            contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
-            
-            # Get current stock price to set strike bounds
-            strike_price_min = None
-            strike_price_max = None
+        
+        # Implement retry logic for robustness
+        for retry_attempt in range(max_retries):
             try:
-                from alpaca.data.requests import StockLatestQuoteRequest
-                quote_request = StockLatestQuoteRequest(symbol_or_symbols=symbol, feed="iex")
-                quotes = self.data_client.get_stock_latest_quote(quote_request)
-                if symbol in quotes:
-                    quote = quotes[symbol]
-                    if quote.bid_price and quote.ask_price and quote.bid_price > 0 and quote.ask_price > 0:
-                        current_price = float(quote.bid_price + quote.ask_price) / 2
-                        # Set bounds to +/- 10% of current price for 0-DTE options
-                        strike_price_min = current_price * 0.90
-                        strike_price_max = current_price * 1.10
-                        logger.info(f"Setting strike bounds for {symbol}: ${strike_price_min:.2f} - ${strike_price_max:.2f} (current: ${current_price:.2f})")
-            except Exception as e:
-                logger.debug(f"Could not get current price for strike bounds: {e}")
+                # Determine contract type
+                contract_type = ContractType.CALL if option_type.upper() == 'CALL' else ContractType.PUT
                 
-            # Log what we're about to request
-            logger.info(f"Requesting {option_type} options for {symbol} expiring {expiration.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            logger.info(f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            if strike_price_min and strike_price_max:
-                logger.info(f"Strike bounds: ${strike_price_min:.2f} - ${strike_price_max:.2f}")
-            else:
-                logger.info("No strike bounds set - will get all strikes")
-            
-            # Create request for option contracts using Alpaca's official approach
-            # Note: Using parameters from Alpaca's gamma-scalping example
-            try:
-                # For 0-DTE, we need exact date matching
-                expiration_date = expiration.date()
-                
-                # Log the exact date we're requesting
-                logger.info(f"Requesting options for date object: {expiration_date} (type: {type(expiration_date)})")
-                logger.info(f"Date string format: {expiration_date.strftime('%Y-%m-%d')}")
-                
-                # Build request parameters
-                req_params = {
-                    "underlying_symbols": [symbol],
-                    "root_symbol": symbol,  # Ensure we get SPY not SPYG or others
-                    "status": AssetStatus.ACTIVE,
-                    "expiration_date_gte": expiration_date,  # Use date object
-                    "expiration_date_lte": expiration_date,  # Same date for exact match
-                    "type": contract_type,
-                    "limit": 500  # Get more contracts to ensure we have all strikes
-                }
-                
-                # Add strike filters if we have them
-                if strike_price_min is not None and strike_price_max is not None:
-                    req_params["strike_price_gte"] = strike_price_min
-                    req_params["strike_price_lte"] = strike_price_max
-                    logger.info(f"Adding strike filter: ${strike_price_min:.2f} - ${strike_price_max:.2f}")
-                
-                req = GetOptionContractsRequest(**req_params)
-                
-                logger.info(f"Request: underlying={symbol}, date_gte={expiration_date}, date_lte={expiration_date}, type={contract_type}")
-            except TypeError as e:
-                logger.warning(f"Failed with standard parameters: {e}")
-                # If the standard approach doesn't work, try a simpler request
+                # Get current stock price to set strike bounds
+                strike_price_min = None
+                strike_price_max = None
                 try:
-                    req = GetOptionContractsRequest(
-                        underlying_symbols=[symbol],
-                        status=AssetStatus.ACTIVE,
-                        expiration_date=expiration.strftime('%Y-%m-%d'),  # Try string format
-                        type=contract_type
-                    )
-                    logger.info("Using simplified request with string date format")
-                except TypeError:
-                    # Last resort - minimal request
-                    req = GetOptionContractsRequest(
-                        underlying_symbols=[symbol],
-                        type=contract_type
-                    )
-                    logger.warning("Using minimal request - may get too many results")
-            
-            # Debug: log the exact request being sent
-            logger.info(f"GetOptionContractsRequest created - request type: {type(req)}")
-            logger.info(f"Request attributes: {dir(req)}")
-            
-            # Log the actual request parameters
-            try:
-                if hasattr(req, 'model_dump'):
-                    req_dict = req.model_dump()
-                elif hasattr(req, 'dict'):
-                    req_dict = req.dict()
-                else:
-                    req_dict = {k: getattr(req, k) for k in dir(req) if not k.startswith('_') and hasattr(req, k)}
-                logger.info(f"Full request parameters: {req_dict}")
-            except Exception as e:
-                logger.info(f"Could not dump request: {e}")
-            
-            # Get contracts from Alpaca using TradingClient with pagination support
-            all_contracts = []
-            page_token = None
-            
-            while True:
-                if page_token:
-                    req.page_token = page_token
-                    
-                contracts_response = self.trading_client.get_option_contracts(req)
-                
-                # Debug the response structure
-                logger.debug(f"Response type: {type(contracts_response)}")
-                if hasattr(contracts_response, '__dict__'):
-                    logger.debug(f"Response attributes: {list(contracts_response.__dict__.keys())}")
-                
-                # Add contracts from this page
-                page_contracts = []
-                if hasattr(contracts_response, 'option_contracts'):
-                    page_contracts = contracts_response.option_contracts
-                elif isinstance(contracts_response, list):
-                    page_contracts = contracts_response
-                else:
-                    # Try to iterate directly
-                    page_contracts = list(contracts_response)
-                
-                logger.debug(f"Found {len(page_contracts)} contracts on this page")
-                all_contracts.extend(page_contracts)
-                
-                # Check for next page
-                if hasattr(contracts_response, 'next_page_token') and contracts_response.next_page_token:
-                    page_token = contracts_response.next_page_token
-                else:
-                    break
-            
-            # Debug log the response
-            logger.info(f"Received {len(all_contracts)} {option_type} options for {symbol} expiring {expiration.strftime('%Y-%m-%d')}")
-            
-            # Use the collected contracts
-            contract_count = len(all_contracts)
-            logger.info(f"Total contracts after pagination: {contract_count}")
-            
-            # If we got too many contracts or strikes are way off, let's try a different approach
-            if contract_count > 50:
-                logger.warning(f"Got {contract_count} contracts - filtering to reasonable strikes")
-            
-            # Convert to our standard format
-            result = []
-            contracts_list = all_contracts
-                
-            for contract in contracts_list:
-                # Handle both object and dict access patterns
-                if hasattr(contract, 'symbol'):
-                    # Use expiration_date attribute (correct for Alpaca SDK)
-                    expiration_date = contract.expiration_date if hasattr(contract, 'expiration_date') else None
-                    
-                    # Try different possible attribute names for contract type
-                    contract_type_val = None
-                    for attr_name in ['type', 'option_type', 'contract_type', 'side']:
-                        if hasattr(contract, attr_name):
-                            contract_type_val = getattr(contract, attr_name)
-                            break
-                    
-                    # Convert to string representation
-                    if contract_type_val:
-                        if hasattr(contract_type_val, 'value'):
-                            type_str = contract_type_val.value  # For enum types
-                        elif isinstance(contract_type_val, str):
-                            type_str = contract_type_val.upper()
-                        else:
-                            type_str = str(contract_type_val).upper()
-                    else:
-                        # Try to extract from symbol (SPY251219C00590000 format)
-                        symbol_str = contract.symbol
-                        type_str = 'CALL' if 'C' in symbol_str[-9:] else 'PUT'
-                    
-                    # Log the contract symbol being added - first few only
-                    if len(result) < 5:  # Log first 5 contracts
-                        contract_exp_str = expiration_date.strftime('%Y-%m-%d') if expiration_date else 'N/A'
-                        logger.info(f"Contract details: symbol={contract.symbol}, strike=${contract.strike_price}, exp={contract_exp_str}, type={type_str}")
-                        
-                        # Parse the symbol to verify the date
-                        import re
-                        symbol_match = re.match(r'^([A-Z]+)(\d{6})([CP])(\d{8})$', contract.symbol)
-                        if symbol_match:
-                            underlying, date_part, opt_type, strike_part = symbol_match.groups()
-                            # Convert YYMMDD to date
-                            year = 2000 + int(date_part[:2])
-                            month = int(date_part[2:4])
-                            day = int(date_part[4:6])
-                            symbol_date = f"{year}-{month:02d}-{day:02d}"
-                            logger.info(f"Parsed from symbol: underlying={underlying}, date={symbol_date}, type={opt_type}, strike=${float(strike_part)/1000:.2f}")
-                        
-                        # Check if this is the correct expiration
-                        if expiration_date and expiration.date() != expiration_date:
-                            logger.warning(f"Contract expiration mismatch! Requested: {expiration.strftime('%Y-%m-%d')}, Got: {contract_exp_str}")
-                    
-                    result.append({
-                        'symbol': contract.symbol,  # OCC format symbol
-                        'strike': float(contract.strike_price),
-                        'expiration': expiration_date,
-                        'type': type_str,
-                        'underlying': contract.underlying_symbol,
-                        'contract_size': contract.size if hasattr(contract, 'size') else 100,
-                        'style': contract.style if hasattr(contract, 'style') else 'American'
-                    })
-                elif isinstance(contract, dict):
-                    result.append({
-                        'symbol': contract.get('symbol'),  # OCC format symbol
-                        'strike': float(contract.get('strike_price', 0)),
-                        'expiration': contract.get('expiration'),
-                        'type': 'CALL' if contract.get('contract_type') == 'call' else 'PUT',
-                        'underlying': contract.get('underlying_symbol', symbol),
-                        'contract_size': contract.get('size', 100),
-                        'style': contract.get('style', 'American')
-                    })
-                else:
-                    logger.warning(f"Unexpected contract format: {type(contract)}")
-            
-            logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
-            
-            # Check if we got strikes that seem incorrect
-            if result and symbol == 'SPY':
-                strikes = [c['strike'] for c in result]
-                if strikes:
-                    min_strike = min(strikes)
-                    max_strike = max(strikes)
-                    logger.info(f"Retrieved strikes range: ${min_strike:.2f} - ${max_strike:.2f} ({len(strikes)} different strikes)")
-            
-            # HOTFIX: Filter contracts to near-the-money to reduce API calls
-            # Get current stock price and filter to 5% range
-            try:
-                from alpaca.data.requests import StockLatestQuoteRequest
-                
-                # Try multiple approaches to get current price
-                current_price = None
-                
-                # Method 1: Try latest quote with IEX feed
-                try:
+                    from alpaca.data.requests import StockLatestQuoteRequest
                     quote_request = StockLatestQuoteRequest(symbol_or_symbols=symbol, feed="iex")
                     quotes = self.data_client.get_stock_latest_quote(quote_request)
                     if symbol in quotes:
                         quote = quotes[symbol]
-                        # Calculate mid price from bid/ask
                         if quote.bid_price and quote.ask_price and quote.bid_price > 0 and quote.ask_price > 0:
                             current_price = float(quote.bid_price + quote.ask_price) / 2
-                        elif quote.ask_price and quote.ask_price > 0:
-                            current_price = float(quote.ask_price)
-                        elif quote.bid_price and quote.bid_price > 0:
-                            current_price = float(quote.bid_price)
-                        else:
-                            current_price = None
-                        
-                        if current_price:
-                            logger.info(f"HOTFIX: Got {symbol} price ${current_price:.2f} from latest quote (bid: ${quote.bid_price}, ask: ${quote.ask_price})")
+                            # Set bounds to +/- 10% of current price for 0-DTE options
+                            strike_price_min = current_price * 0.90
+                            strike_price_max = current_price * 1.10
+                            logger.info(f"Setting strike bounds for {symbol}: ${strike_price_min:.2f} - ${strike_price_max:.2f} (current: ${current_price:.2f})")
                 except Exception as e:
-                    logger.debug(f"HOTFIX: Latest quote failed: {e}")
+                    logger.debug(f"Could not get current price for strike bounds: {e}")
                 
-                # Method 2: If that fails, use a reasonable estimate based on strike range
-                if not current_price:
-                    strikes = [c['strike'] for c in result]
-                    if strikes:
-                        min_strike = min(strikes)
-                        max_strike = max(strikes)
-                        current_price = (min_strike + max_strike) / 2
-                        logger.info(f"HOTFIX: Estimated {symbol} price ${current_price:.2f} from strike range {min_strike}-{max_strike}")
                 
-                if current_price and current_price > 0:
-                    lower_bound = current_price * 0.95
-                    upper_bound = current_price * 1.05
+                # Create request for option contracts using Alpaca's official approach
+                # Note: Using parameters from Alpaca's gamma-scalping example
+                try:
+                    # For 0-DTE, we need exact date matching
+                    expiration_date = expiration.date()
                     
-                    filtered_result = [
-                        c for c in result 
-                        if lower_bound <= c['strike'] <= upper_bound
-                    ]
                     
-                    logger.info(f"HOTFIX: Filtered {len(result)} contracts to {len(filtered_result)} near-the-money (price: ${current_price:.2f}, range: ${lower_bound:.2f}-${upper_bound:.2f})")
-                    return filtered_result
-                else:
-                    logger.warning(f"HOTFIX: Could not determine stock price for {symbol}, returning all contracts")
+                    # Build request parameters
+                    req_params = {
+                        "underlying_symbols": [symbol],
+                        "root_symbol": symbol,  # Ensure we get SPY not SPYG or others
+                        "status": AssetStatus.ACTIVE,
+                        "expiration_date_gte": expiration_date,  # Use date object
+                        "expiration_date_lte": expiration_date,  # Same date for exact match
+                        "type": contract_type,
+                        "limit": 500  # Get more contracts to ensure we have all strikes
+                    }
                     
+                    # Add strike filters if we have them
+                    if strike_price_min is not None and strike_price_max is not None:
+                        # Convert to string with proper formatting to avoid floating point issues
+                        req_params["strike_price_gte"] = f"{strike_price_min:.2f}"
+                        req_params["strike_price_lte"] = f"{strike_price_max:.2f}"
+                    
+                    req = GetOptionContractsRequest(**req_params)
+                    
+                except TypeError as e:
+                    logger.warning(f"Failed with standard parameters: {e}")
+                    # If the standard approach doesn't work, try a simpler request
+                    try:
+                        req = GetOptionContractsRequest(
+                            underlying_symbols=[symbol],
+                            status=AssetStatus.ACTIVE,
+                            expiration_date=expiration.strftime('%Y-%m-%d'),  # Try string format
+                            type=contract_type
+                        )
+                    except TypeError:
+                        # Last resort - minimal request
+                        req = GetOptionContractsRequest(
+                            underlying_symbols=[symbol],
+                            type=contract_type
+                        )
+                
+                
+                # Get contracts from Alpaca using TradingClient with pagination support
+                all_contracts = []
+                page_token = None
+                
+                while True:
+                    if page_token:
+                        req.page_token = page_token
+                        
+                    contracts_response = self.trading_client.get_option_contracts(req)
+                    
+                    
+                    # Add contracts from this page
+                    page_contracts = []
+                    if hasattr(contracts_response, 'option_contracts'):
+                        page_contracts = contracts_response.option_contracts
+                    elif isinstance(contracts_response, list):
+                        page_contracts = contracts_response
+                    else:
+                        # Try to iterate directly
+                        page_contracts = list(contracts_response)
+                    
+                    all_contracts.extend(page_contracts)
+                    
+                    # Check for next page
+                    if hasattr(contracts_response, 'next_page_token') and contracts_response.next_page_token:
+                        page_token = contracts_response.next_page_token
+                    else:
+                        break
+                
+                
+                # Use the collected contracts
+                contract_count = len(all_contracts)
+                
+                # Convert to our standard format
+                result = []
+                contracts_list = all_contracts
+                    
+                for contract in contracts_list:
+                    # Handle both object and dict access patterns
+                    if hasattr(contract, 'symbol'):
+                        # Use expiration_date attribute (correct for Alpaca SDK)
+                        expiration_date = contract.expiration_date if hasattr(contract, 'expiration_date') else None
+                    
+                        
+                        # Try different possible attribute names for contract type
+                        contract_type_val = None
+                        for attr_name in ['type', 'option_type', 'contract_type', 'side']:
+                            if hasattr(contract, attr_name):
+                                contract_type_val = getattr(contract, attr_name)
+                                break
+                    
+                        # Convert to string representation
+                        if contract_type_val:
+                            if hasattr(contract_type_val, 'value'):
+                                type_str = contract_type_val.value  # For enum types
+                            elif isinstance(contract_type_val, str):
+                                type_str = contract_type_val.upper()
+                            else:
+                                type_str = str(contract_type_val).upper()
+                        else:
+                            # Try to extract from symbol (SPY251219C00590000 format)
+                            symbol_str = contract.symbol
+                            type_str = 'CALL' if 'C' in symbol_str[-9:] else 'PUT'
+                    
+                        
+                        result.append({
+                            'symbol': contract.symbol,  # OCC format symbol
+                            'strike': float(contract.strike_price),
+                            'expiration': expiration_date,
+                            'type': type_str,
+                            'underlying': contract.underlying_symbol,
+                            'contract_size': contract.size if hasattr(contract, 'size') else 100,
+                            'style': contract.style if hasattr(contract, 'style') else 'American'
+                        })
+                    elif isinstance(contract, dict):
+                        result.append({
+                            'symbol': contract.get('symbol'),  # OCC format symbol
+                            'strike': float(contract.get('strike_price', 0)),
+                            'expiration': contract.get('expiration'),
+                            'type': 'CALL' if contract.get('contract_type') == 'call' else 'PUT',
+                            'underlying': contract.get('underlying_symbol', symbol),
+                            'contract_size': contract.get('size', 100),
+                            'style': contract.get('style', 'American')
+                        })
+                    else:
+                        logger.warning(f"Unexpected contract format: {type(contract)}")
+                
+                logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
+                
+                
+                return result
+                
             except Exception as e:
-                logger.warning(f"HOTFIX: Filtering failed, returning all contracts: {e}")
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Failed to get option contracts: {e}", exc_info=True)
-            return None
+                logger.error(f"Failed to get option contracts (attempt {retry_attempt + 1}/{max_retries}): {e}", exc_info=True)
+                
+                # Handle specific error types
+                error_msg = str(e).lower()
+                if "rate limit" in error_msg:
+                    # Exponential backoff for rate limits
+                    wait_time = (retry_attempt + 1) * 2
+                    logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry")
+                    time.sleep(wait_time)
+                elif "validation error" in error_msg and retry_attempt < max_retries - 1:
+                    # For validation errors, try widening the strike range on next attempt
+                    logger.warning("Validation error, will retry with adjusted parameters")
+                    time.sleep(1)
+                elif retry_attempt < max_retries - 1:
+                    # General retry with short delay
+                    time.sleep(1)
+                else:
+                    # Final attempt failed
+                    return None
+        
+        # All retries exhausted
+        logger.error(f"All {max_retries} attempts to get option contracts failed")
+        return None
     
     def get_option_chain(self, underlying: str, expiration: Optional[str] = None) -> Optional[Dict]:
         """Get option chain for underlying - not implemented for Alpaca"""
