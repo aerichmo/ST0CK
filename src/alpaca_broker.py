@@ -573,7 +573,8 @@ class AlpacaBroker(BrokerInterface):
                     expiration_date = expiration.date()
                     
                     
-                    # Build request parameters
+                    # Build request parameters - following Alpaca gamma scalping pattern
+                    # Don't include strike filters in the request, filter after fetching
                     req_params = {
                         "underlying_symbols": [symbol],
                         "root_symbol": symbol,  # Ensure we get SPY not SPYG or others
@@ -581,14 +582,8 @@ class AlpacaBroker(BrokerInterface):
                         "expiration_date_gte": expiration_date,  # Use date object
                         "expiration_date_lte": expiration_date,  # Same date for exact match
                         "type": contract_type,
-                        "limit": 500  # Get more contracts to ensure we have all strikes
+                        "limit": 500  # Get all contracts, will filter by strike later
                     }
-                    
-                    # Add strike filters if we have them
-                    if strike_price_min is not None and strike_price_max is not None:
-                        # Convert to string with proper formatting to avoid floating point issues
-                        req_params["strike_price_gte"] = f"{strike_price_min:.2f}"
-                        req_params["strike_price_lte"] = f"{strike_price_max:.2f}"
                     
                     req = GetOptionContractsRequest(**req_params)
                     
@@ -699,6 +694,14 @@ class AlpacaBroker(BrokerInterface):
                 
                 logger.info(f"Found {len(result)} {option_type} option contracts for {symbol}")
                 
+                # Filter contracts to only those within strike bounds if we have them
+                if strike_price_min is not None and strike_price_max is not None:
+                    filtered_result = [
+                        contract for contract in result
+                        if strike_price_min <= contract['strike'] <= strike_price_max
+                    ]
+                    logger.info(f"Filtered to {len(filtered_result)} contracts within strike range ${strike_price_min:.2f} - ${strike_price_max:.2f}")
+                    return filtered_result
                 
                 return result
                 
