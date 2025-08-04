@@ -2,9 +2,9 @@ name: ST0CKG
 
 on:
   schedule:
-    # Run at 9:20 AM ET every weekday
-    # UTC times: 1:20 PM (summer/EDT) or 2:20 PM (winter/EST)
-    - cron: '20 13 * * 1-5'  # 1:20 PM UTC (9:20 AM EDT)
+    # Run at 9:00 AM ET every weekday
+    # UTC times: 1:00 PM (summer/EDT) or 2:00 PM (winter/EST)
+    - cron: '0 13 * * 1-5'  # 1:00 PM UTC (9:00 AM EDT)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
