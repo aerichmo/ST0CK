@@ -164,7 +164,8 @@ class UnifiedTradingEngine:
     def _load_daily_metrics(self):
         """Load today's trading metrics from database"""
         today_trades = self.db.get_trades(self.bot_id, limit=50)
-        today_start = datetime.now(self.eastern).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Create timezone-naive datetime for comparison with database timestamps
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         
         daily_trades = [t for t in today_trades if t.entry_time >= today_start]
         
