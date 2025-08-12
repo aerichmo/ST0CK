@@ -4,11 +4,25 @@ import sqlite3
 import os
 
 # Use environment variable or default
-db_path = os.environ.get('DATABASE_PATH', 'trading_multi.db')
+db_url = os.environ.get('DATABASE_URL', 'sqlite:///trading_multi.db')
+# Extract path from URL
+if db_url.startswith('sqlite:///'):
+    db_path = db_url.replace('sqlite:///', '')
+else:
+    db_path = 'trading_multi.db'
+
+print(f"Database URL: {db_url}")
+print(f"Database path: {db_path}")
 
 if os.path.exists(db_path):
+    print(f"Database found at {db_path}")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    
+    # First check what's in the database
+    cursor.execute("SELECT contract_symbol, bot_id, status FROM option_trades WHERE status = 'OPEN'")
+    open_positions = cursor.fetchall()
+    print(f"Current open positions: {open_positions}")
     
     # Close the specific expired positions
     cursor.execute("""
@@ -32,11 +46,19 @@ if os.path.exists(db_path):
     
     print(f"Closed {rows_updated} expired positions")
     
-    # Show current open positions
+    # Show current open positions after cleanup
     cursor.execute("SELECT COUNT(*) FROM option_trades WHERE status = 'OPEN'")
     open_count = cursor.fetchone()[0]
     print(f"Remaining open positions: {open_count}")
     
+    # Show which positions remain open
+    if open_count > 0:
+        cursor.execute("SELECT contract_symbol, bot_id, entry_time FROM option_trades WHERE status = 'OPEN'")
+        remaining = cursor.fetchall()
+        print(f"Remaining positions: {remaining}")
+    
     conn.close()
 else:
     print(f"Database not found at {db_path}")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Directory contents: {os.listdir('.')}")
