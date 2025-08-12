@@ -81,7 +81,7 @@ jobs:
     - name: Clean up expired positions
       run: |
         echo "Cleaning up any expired option positions..."
-        python fix_github_positions.py || echo "Cleanup script not critical, continuing..."
+        python force_cleanup_expired.py || python fix_github_positions.py || echo "Cleanup attempted, continuing..."
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
     
