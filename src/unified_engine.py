@@ -155,6 +155,9 @@ class UnifiedTradingEngine:
             # Load daily metrics
             self._load_daily_metrics()
             
+            # Load any open positions from database
+            await self._load_open_positions()
+            
             self.logger.info(f"[{self.bot_id}] Engine initialization complete")
             
         except Exception as e:
@@ -181,6 +184,65 @@ class UnifiedTradingEngine:
                 break
         
         self.daily_metrics['consecutive_losses'] = consecutive_losses
+    
+    async def _load_open_positions(self):
+        """Load open positions from database on startup"""
+        try:
+            self.logger.info(f"[{self.bot_id}] Loading open positions from database...")
+            
+            # Get open positions from database
+            db_positions = self.db.get_open_positions(self.bot_id)
+            
+            if not db_positions:
+                self.logger.info(f"[{self.bot_id}] No open positions found in database")
+                return
+            
+            # Recreate Position objects
+            for db_pos in db_positions:
+                try:
+                    # Create Position object
+                    position = Position(
+                        id=db_pos['position_id'],
+                        symbol=db_pos['symbol'],
+                        side=db_pos['side'],
+                        quantity=db_pos['quantity'],
+                        entry_price=db_pos['entry_price'],
+                        entry_time=db_pos['entry_time']
+                    )
+                    
+                    # Add strategy-specific data
+                    if db_pos.get('asset_type') == 'option':
+                        position.strategy_data = {
+                            'option_type': db_pos.get('option_type'),
+                            'strike': db_pos.get('strike'),
+                            'expiration': db_pos.get('expiration'),
+                            'signal_type': db_pos.get('signal_type'),
+                            'underlying_symbol': db_pos.get('underlying_symbol', 'SPY')
+                        }
+                    
+                    # Restore strategy details if available
+                    if db_pos.get('strategy_details'):
+                        position.strategy_data.update(db_pos['strategy_details'])
+                    
+                    # Get current price to update P&L
+                    try:
+                        quote = await self.market_data.get_quote(position.symbol)
+                        if quote:
+                            position.update_price(quote['price'])
+                    except Exception as e:
+                        self.logger.warning(f"[{self.bot_id}] Failed to get current price for {position.symbol}: {e}")
+                    
+                    # Add to positions dict
+                    self.positions[position.id] = position
+                    self.logger.info(f"[{self.bot_id}] Recovered position: {position.symbol} x{position.quantity} @ ${position.entry_price}")
+                    
+                except Exception as e:
+                    self.logger.error(f"[{self.bot_id}] Failed to recover position {db_pos.get('position_id')}: {e}")
+            
+            self.logger.info(f"[{self.bot_id}] Loaded {len(self.positions)} open positions from database")
+            
+        except Exception as e:
+            self.logger.error(f"[{self.bot_id}] Failed to load open positions: {e}", exc_info=True)
     
     async def run(self):
         """Main trading loop"""

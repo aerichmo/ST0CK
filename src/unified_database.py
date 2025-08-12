@@ -432,6 +432,59 @@ class UnifiedDatabaseManager:
             self.logger.error(f"Error getting trades: {e}")
             return []
     
+    def get_open_positions(self, bot_id: str) -> List[Dict[str, Any]]:
+        """Get all open positions for a bot"""
+        try:
+            with self.get_session() as session:
+                open_positions = []
+                
+                # Get open stock trades
+                stock_trades = session.query(StockTrade).filter(
+                    StockTrade.bot_id == bot_id,
+                    StockTrade.status == 'OPEN'
+                ).all()
+                
+                for trade in stock_trades:
+                    open_positions.append({
+                        'position_id': trade.position_id,
+                        'symbol': trade.symbol,
+                        'quantity': trade.quantity,
+                        'entry_price': trade.entry_price,
+                        'entry_time': trade.entry_time,
+                        'side': 'long' if trade.action == 'BUY' else 'short',
+                        'asset_type': 'stock',
+                        'strategy_details': trade.strategy_details
+                    })
+                
+                # Get open option trades
+                option_trades = session.query(OptionTrade).filter(
+                    OptionTrade.bot_id == bot_id,
+                    OptionTrade.status == 'OPEN'
+                ).all()
+                
+                for trade in option_trades:
+                    open_positions.append({
+                        'position_id': trade.position_id,
+                        'symbol': trade.symbol,
+                        'underlying_symbol': 'SPY',  # Default to SPY for now
+                        'option_type': trade.option_type,
+                        'strike': trade.strike,
+                        'expiration': trade.expiry,
+                        'quantity': trade.contracts,
+                        'entry_price': trade.entry_price,
+                        'entry_time': trade.entry_time,
+                        'side': 'long',  # Options are always long in this system
+                        'asset_type': 'option',
+                        'signal_type': trade.signal_type,
+                        'strategy_details': trade.strategy_details
+                    })
+                
+                return open_positions
+                
+        except Exception as e:
+            self.logger.error(f"Error getting open positions: {e}")
+            return []
+    
     def close(self):
         """Close database connections"""
         try:
