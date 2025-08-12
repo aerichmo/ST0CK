@@ -78,6 +78,13 @@ jobs:
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
     
+    - name: Clean up expired positions
+      run: |
+        echo "Cleaning up any expired option positions..."
+        python fix_github_positions.py || echo "Cleanup script not critical, continuing..."
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    
     - name: Run ST0CKG Bot
       run: |
         echo "Starting ST0CKG Battle Lines Bot..."
