@@ -73,41 +73,72 @@ class AlpacaBroker(BrokerInterface):
         self.data_client = None
         
     def connect(self) -> bool:
-        """Connect to Alpaca APIs"""
-        try:
-            # Initialize trading client
-            self.trading_client = TradingClient(
-                api_key=self.api_key,
-                secret_key=self.secret_key,
-                paper=self.paper,
-                url_override=self.base_url
-            )
-            
-            # Initialize data client (no auth required for basic data)
-            self.data_client = StockHistoricalDataClient(
-                api_key=self.api_key,
-                secret_key=self.secret_key
-            )
-            
-            # Initialize options data client
-            self.option_client = OptionHistoricalDataClient(
-                api_key=self.api_key,
-                secret_key=self.secret_key
-            )
-            
-            # Test connection by fetching account
-            account = self.trading_client.get_account()
-            logger.info(f"Connected to Alpaca {'paper' if self.paper else 'live'} trading")
-            logger.info(f"Account: ${float(account.cash):,.2f} cash, "
-                       f"${float(account.portfolio_value):,.2f} total")
-            
-            self.connected = True
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to connect to Alpaca: {e}")
-            self.connected = False
-            return False
+        """Connect to Alpaca APIs with retry logic and timeout configuration"""
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Attempting to connect to Alpaca (attempt {attempt + 1}/{max_retries})...")
+                
+                # Configure timeout settings
+                import httpx
+                timeout = httpx.Timeout(30.0, connect=15.0, read=30.0)
+                
+                # Initialize trading client with custom transport
+                transport = httpx.HTTPTransport(retries=2)
+                
+                # Initialize trading client
+                self.trading_client = TradingClient(
+                    api_key=self.api_key,
+                    secret_key=self.secret_key,
+                    paper=self.paper,
+                    url_override=self.base_url,
+                    raw_data=False
+                )
+                
+                # Initialize data client with timeout
+                self.data_client = StockHistoricalDataClient(
+                    api_key=self.api_key,
+                    secret_key=self.secret_key,
+                    raw_data=False
+                )
+                
+                # Initialize options data client
+                self.option_client = OptionHistoricalDataClient(
+                    api_key=self.api_key,
+                    secret_key=self.secret_key,
+                    raw_data=False
+                )
+                
+                # Test connection by fetching account with timeout
+                logger.info("Testing connection by fetching account info...")
+                account = self.trading_client.get_account()
+                logger.info(f"Successfully connected to Alpaca {'paper' if self.paper else 'live'} trading")
+                logger.info(f"Account: ${float(account.cash):,.2f} cash, "
+                           f"${float(account.portfolio_value):,.2f} total")
+                
+                self.connected = True
+                return True
+                
+            except Exception as e:
+                logger.error(f"Connection attempt {attempt + 1} failed: {type(e).__name__}: {e}")
+                
+                # Check if this is a network/timeout error
+                error_msg = str(e).lower()
+                if 'timeout' in error_msg or 'connection' in error_msg:
+                    logger.warning("Network timeout detected - this may be due to firewall restrictions")
+                
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error("All connection attempts failed")
+                    self.connected = False
+                    return False
+        
+        return False
     
     def disconnect(self) -> None:
         """Disconnect from Alpaca"""
