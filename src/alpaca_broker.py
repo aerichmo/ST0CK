@@ -73,20 +73,13 @@ class AlpacaBroker(BrokerInterface):
         self.data_client = None
         
     def connect(self) -> bool:
-        """Connect to Alpaca APIs with retry logic and timeout configuration"""
+        """Connect to Alpaca APIs with retry logic"""
         max_retries = 3
         retry_delay = 2
         
         for attempt in range(max_retries):
             try:
                 logger.info(f"Attempting to connect to Alpaca (attempt {attempt + 1}/{max_retries})...")
-                
-                # Configure timeout settings
-                import httpx
-                timeout = httpx.Timeout(30.0, connect=15.0, read=30.0)
-                
-                # Initialize trading client with custom transport
-                transport = httpx.HTTPTransport(retries=2)
                 
                 # Initialize trading client
                 self.trading_client = TradingClient(
@@ -97,7 +90,7 @@ class AlpacaBroker(BrokerInterface):
                     raw_data=False
                 )
                 
-                # Initialize data client with timeout
+                # Initialize data client
                 self.data_client = StockHistoricalDataClient(
                     api_key=self.api_key,
                     secret_key=self.secret_key,
@@ -111,7 +104,7 @@ class AlpacaBroker(BrokerInterface):
                     raw_data=False
                 )
                 
-                # Test connection by fetching account with timeout
+                # Test connection by fetching account
                 logger.info("Testing connection by fetching account info...")
                 account = self.trading_client.get_account()
                 logger.info(f"Successfully connected to Alpaca {'paper' if self.paper else 'live'} trading")
