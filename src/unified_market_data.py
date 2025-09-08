@@ -92,15 +92,24 @@ class UnifiedMarketData:
                     )
                     
                     if quote_data:
+                        # Handle both 'last' and 'last_price' fields for compatibility
+                        last_price = quote_data.get('last', quote_data.get('last_price', 0))
+                        if last_price == 0:
+                            # Calculate from bid/ask if last price not available
+                            last_price = (quote_data.get('bid', 0) + quote_data.get('ask', 0)) / 2
+                        
                         result = {
                             'symbol': symbol,
-                            'price': quote_data.get('last_price', (quote_data.get('bid', 0) + quote_data.get('ask', 0)) / 2),
+                            'price': last_price,
                             'bid': quote_data.get('bid', 0),
                             'ask': quote_data.get('ask', 0),
                             'bid_size': quote_data.get('bid_size', 0),
                             'ask_size': quote_data.get('ask_size', 0),
                             'timestamp': quote_data.get('timestamp', datetime.now())
                         }
+                        
+                        # Log option quote details for debugging (use info level for visibility)
+                        self.logger.info(f"Option quote for {symbol}: price=${last_price:.2f}, bid=${quote_data.get('bid', 0):.2f}, ask=${quote_data.get('ask', 0):.2f}, last=${quote_data.get('last', 'N/A')}")
                         
                         # Cache the result
                         self.cache.set(cache_key, result, UnifiedCache.TTL_QUOTES)

@@ -41,12 +41,21 @@ class Position:
     def update_price(self, price: float):
         """Update current price and P&L calculations"""
         self.current_price = price
-        if self.side == 'long':
-            self.unrealized_pnl = (price - self.entry_price) * self.quantity
-        else:
-            self.unrealized_pnl = (self.entry_price - price) * self.quantity
         
-        self.unrealized_pnl_pct = (self.unrealized_pnl / (self.entry_price * self.quantity)) * 100
+        # Check if this is an option position
+        is_option = any(char in self.symbol for char in ['C', 'P']) and any(char.isdigit() for char in self.symbol[3:])
+        
+        # For options, multiply by 100 (contract multiplier)
+        multiplier = 100 if is_option else 1
+        
+        if self.side == 'long':
+            self.unrealized_pnl = (price - self.entry_price) * self.quantity * multiplier
+        else:
+            self.unrealized_pnl = (self.entry_price - price) * self.quantity * multiplier
+        
+        # Calculate percentage based on total invested
+        total_invested = self.entry_price * self.quantity * multiplier
+        self.unrealized_pnl_pct = (self.unrealized_pnl / total_invested) * 100 if total_invested > 0 else 0
 
 class TradingStrategy(ABC):
     """Abstract base for trading strategies"""
@@ -270,7 +279,12 @@ class UnifiedTradingEngine:
                     # Update all positions for this symbol
                     for position in self.positions.values():
                         if position.symbol == symbol:
+                            old_price = position.current_price
                             position.update_price(quote['price'])
+                            # Log price updates (use info for visibility)
+                            if old_price != position.current_price or not hasattr(self, '_last_price_log'):
+                                self.logger.info(f"[{self.bot_id}] Position {symbol} price: ${position.current_price:.2f} (was ${old_price:.2f}), P&L: ${position.unrealized_pnl:.2f}")
+                                self._last_price_log = True
                             
             except Exception as e:
                 self.logger.error(f"[{self.bot_id}] Failed to update price for {symbol}: {e}")
@@ -338,14 +352,23 @@ class UnifiedTradingEngine:
             )
             
             if order:
+                # Get actual fill price if available
+                filled_price = None
+                if hasattr(order, 'filled_avg_price') and order.filled_avg_price:
+                    filled_price = float(order.filled_avg_price)
+                elif hasattr(order, 'limit_price') and order.limit_price:
+                    filled_price = float(order.limit_price)
+                else:
+                    filled_price = order_params.get('limit_price') or signal.get('price')
+                
                 # Create position entry
                 position = Position(
                     id=order.id,
                     symbol=order_params['symbol'],
-                    entry_price=order_params.get('limit_price') or signal.get('price'),
+                    entry_price=filled_price,
                     entry_time=datetime.now(self.eastern),
                     quantity=position_size,
-                    side=order_params['side'],
+                    side='long' if order_params['side'] == 'buy' else 'short',
                     strategy_data=signal,
                     order_id=order.id
                 )
@@ -422,12 +445,17 @@ class UnifiedTradingEngine:
                     exit_time = datetime.now(self.eastern)
                     
                     # Calculate P&L
-                    if position.side == 'long':
-                        pnl = (exit_price - position.entry_price) * position.quantity
-                    else:
-                        pnl = (position.entry_price - exit_price) * position.quantity
+                    # Check if this is an option position
+                    is_option = any(char in position.symbol for char in ['C', 'P']) and any(char.isdigit() for char in position.symbol[3:])
+                    multiplier = 100 if is_option else 1
                     
-                    pnl_pct = (pnl / (position.entry_price * position.quantity)) * 100
+                    if position.side == 'long':
+                        pnl = (exit_price - position.entry_price) * position.quantity * multiplier
+                    else:
+                        pnl = (position.entry_price - exit_price) * position.quantity * multiplier
+                    
+                    total_invested = position.entry_price * position.quantity * multiplier
+                    pnl_pct = (pnl / total_invested) * 100 if total_invested > 0 else 0
                     
                     # Update database based on trade type
                     # Check if this is an option trade by examining strategy_data
