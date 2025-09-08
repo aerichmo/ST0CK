@@ -166,7 +166,18 @@ class UnifiedTradingEngine:
         today_trades = self.db.get_trades(self.bot_id, limit=50)
         today_start = datetime.now(self.eastern).replace(hour=0, minute=0, second=0, microsecond=0)
         
-        daily_trades = [t for t in today_trades if t.entry_time >= today_start]
+        # Ensure timezone-aware comparison
+        daily_trades = []
+        for t in today_trades:
+            if t.entry_time:
+                # Make entry_time timezone-aware if it isn't already
+                if t.entry_time.tzinfo is None:
+                    entry_time_aware = self.eastern.localize(t.entry_time)
+                else:
+                    entry_time_aware = t.entry_time
+                
+                if entry_time_aware >= today_start:
+                    daily_trades.append(t)
         
         self.daily_metrics['trades'] = len(daily_trades)
         self.daily_metrics['pnl'] = sum(t.pnl or 0 for t in daily_trades)
