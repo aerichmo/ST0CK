@@ -508,6 +508,10 @@ class UnifiedTradingEngine:
         start_time = self.config.get('trading_window_start', '09:30')
         end_time = self.config.get('trading_window_end', '15:30')
         
+        # Handle special cases for strategies that can trade any time
+        if start_time == 'Any time' or end_time == 'Market hours':
+            return self._is_market_open()  # Trade during all market hours
+        
         # Parse times
         start_hour, start_min = map(int, start_time.split(':'))
         end_hour, end_min = map(int, end_time.split(':'))
