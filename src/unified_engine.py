@@ -283,7 +283,10 @@ class UnifiedTradingEngine:
                             position.update_price(quote['price'])
                             # Log price updates (use info for visibility)
                             if old_price != position.current_price or not hasattr(self, '_last_price_log'):
-                                self.logger.info(f"[{self.bot_id}] Position {symbol} price: ${position.current_price:.2f} (was ${old_price:.2f}), P&L: ${position.unrealized_pnl:.2f}")
+                                if old_price is not None:
+                                    self.logger.info(f"[{self.bot_id}] Position {symbol} price: ${position.current_price:.2f} (was ${old_price:.2f}), P&L: ${position.unrealized_pnl:.2f}")
+                                else:
+                                    self.logger.info(f"[{self.bot_id}] Position {symbol} initial price: ${position.current_price:.2f}, P&L: ${position.unrealized_pnl:.2f}")
                                 self._last_price_log = True
                             
             except Exception as e:
