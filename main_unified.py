@@ -53,8 +53,8 @@ BOT_REGISTRY = {
     'st0ckg': {
         'strategy_class': ST0CKGStrategy,
         'strategy_args': {
-            'start_time': '09:30',  # Morning session start
-            'end_time': '11:00',    # Morning session end
+            'start_time': '09:30',  # Not used for trading window anymore
+            'end_time': '11:00',    # Bot trades during all market hours
             'max_positions': 2
         },
         'api_key_env': 'ST0CKGKEY',

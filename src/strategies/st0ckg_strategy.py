@@ -81,8 +81,8 @@ class ST0CKGStrategy(TradingStrategy):
         """Get strategy configuration"""
         return {
             'strategy': 'st0ckg',
-            'trading_window_start': self.start_time,
-            'trading_window_end': self.end_time,
+            'trading_window_start': 'Any time',
+            'trading_window_end': 'Market hours',
             'max_positions': self.max_positions,
             'risk_per_trade': self.risk_per_trade,
             'cycle_delay': 2,  # 2 second cycle for options
@@ -151,13 +151,7 @@ class ST0CKGStrategy(TradingStrategy):
         """
         now = datetime.now(self.eastern)
         
-        # Check trading window
-        if not self._in_trading_window(now):
-            # Log once per minute when outside window
-            if not hasattr(self, '_last_window_log') or (now - self._last_window_log).seconds > 60:
-                self.logger.info(f"Outside trading window. Current: {now.strftime('%H:%M')}, Windows: {self.start_time}-{self.end_time}")
-                self._last_window_log = now
-            return None
+        # Trading window check removed - bot can trade at any time
         
         # Check position limit
         if len(positions) >= self.max_positions:
