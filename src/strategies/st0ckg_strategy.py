@@ -285,9 +285,9 @@ class ST0CKGStrategy(TradingStrategy):
         
         Exit conditions:
         1. Stop loss hit (option loses 50% of value)
-        2. Breakeven management at 1R
-        3. Scale out at 1.5R
-        4. Final target at 3R
+        2. Breakeven management at 1R (SPY moves $0.10)
+        3. Scale out at 1.5R (SPY moves $0.15)
+        4. Final target at 3R (SPY moves $0.30)
         5. Time exit near market close
         6. Signal invalidation
         """
@@ -301,25 +301,44 @@ class ST0CKGStrategy(TradingStrategy):
         if not position.current_price:
             return None
         
-        # Get position metadata
-        entry_price = position.entry_price
-        current_price = position.current_price
-        risk_amount = position.strategy_data.get('risk_amount', entry_price * position.quantity * 100)
+        # Get SPY price for R calculation
+        spy_price = market_data.get('spy_price')
+        if not spy_price:
+            return None
         
-        # Calculate R-multiple
-        pnl = (current_price - entry_price) * position.quantity * 100
-        r_multiple = pnl / risk_amount if risk_amount > 0 else 0
+        # Get entry SPY price from position metadata
+        entry_spy_price = position.strategy_data.get('price')
+        if not entry_spy_price:
+            self.logger.warning(f"No entry SPY price for position {position.symbol}")
+            return None
+        
+        # Calculate R-multiple based on SPY movement
+        # 1R = $0.10 SPY move (as per strategy documentation)
+        spy_move = spy_price - entry_spy_price
+        
+        # For calls, positive SPY move is profit; for puts, negative SPY move is profit
+        if 'PUT' in position.symbol.upper():
+            spy_move = -spy_move
+        
+        r_multiple = spy_move / 0.10  # $0.10 = 1R
+        
+        # Log R-multiple for monitoring
+        if not hasattr(self, '_last_r_log') or (now - self._last_r_log).seconds > 30:
+            self.logger.info(f"Position {position.symbol}: SPY moved ${spy_move:.2f}, R={r_multiple:.2f}")
+            self._last_r_log = now
         
         # Stop loss - option loses 50% of value
+        entry_price = position.entry_price
+        current_price = position.current_price
         if current_price <= entry_price * 0.5:
             return "stop_loss"
         
-        # Check R-based exits
-        if r_multiple >= self.final_target_r:
+        # Check R-based exits based on SPY movement
+        if r_multiple >= self.final_target_r:  # 3R = $0.30 SPY move
             return "final_target"
-        elif r_multiple >= self.scale_r and not position.strategy_data.get('scaled', False):
+        elif r_multiple >= self.scale_r and not position.strategy_data.get('scaled', False):  # 1.5R = $0.15 SPY move
             return "scale_out"
-        elif r_multiple >= self.breakeven_r and not position.strategy_data.get('breakeven_set', False):
+        elif r_multiple >= self.breakeven_r and not position.strategy_data.get('breakeven_set', False):  # 1R = $0.10 SPY move
             # Just update stop, don't exit
             self._update_breakeven_stop(position)
             return None
