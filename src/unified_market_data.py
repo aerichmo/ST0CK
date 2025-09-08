@@ -92,11 +92,16 @@ class UnifiedMarketData:
                     )
                     
                     if quote_data:
+                        # Log raw quote data to see what we're getting
+                        self.logger.info(f"Raw option quote for {symbol}: {quote_data}")
+                        
                         # Handle both 'last' and 'last_price' fields for compatibility
                         last_price = quote_data.get('last', quote_data.get('last_price', 0))
                         if last_price == 0:
                             # Calculate from bid/ask if last price not available
-                            last_price = (quote_data.get('bid', 0) + quote_data.get('ask', 0)) / 2
+                            bid = quote_data.get('bid', 0)
+                            ask = quote_data.get('ask', 0)
+                            last_price = (bid + ask) / 2 if (bid > 0 and ask > 0) else 0
                         
                         result = {
                             'symbol': symbol,
@@ -109,7 +114,7 @@ class UnifiedMarketData:
                         }
                         
                         # Log option quote details for debugging (use info level for visibility)
-                        self.logger.info(f"Option quote for {symbol}: price=${last_price:.2f}, bid=${quote_data.get('bid', 0):.2f}, ask=${quote_data.get('ask', 0):.2f}, last=${quote_data.get('last', 'N/A')}")
+                        self.logger.info(f"Processed option quote for {symbol}: price=${last_price:.2f}, bid=${quote_data.get('bid', 0):.2f}, ask=${quote_data.get('ask', 0):.2f}")
                         
                         # Cache the result
                         self.cache.set(cache_key, result, UnifiedCache.TTL_QUOTES)

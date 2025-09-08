@@ -274,23 +274,26 @@ class UnifiedTradingEngine:
         
         for symbol in symbols:
             try:
+                self.logger.info(f"[{self.bot_id}] Fetching quote for {symbol}")
                 quote = await self.market_data.get_quote(symbol)
                 if quote:
+                    # Log the quote we received
+                    self.logger.info(f"[{self.bot_id}] Quote received for {symbol}: price=${quote.get('price', 'N/A')}, bid=${quote.get('bid', 'N/A')}, ask=${quote.get('ask', 'N/A')}")
+                    
                     # Update all positions for this symbol
                     for position in self.positions.values():
                         if position.symbol == symbol:
                             old_price = position.current_price
-                            position.update_price(quote['price'])
-                            # Log price updates (use info for visibility)
-                            if old_price != position.current_price or not hasattr(self, '_last_price_log'):
-                                if old_price is not None:
-                                    self.logger.info(f"[{self.bot_id}] Position {symbol} price: ${position.current_price:.2f} (was ${old_price:.2f}), P&L: ${position.unrealized_pnl:.2f}")
-                                else:
-                                    self.logger.info(f"[{self.bot_id}] Position {symbol} initial price: ${position.current_price:.2f}, P&L: ${position.unrealized_pnl:.2f}")
-                                self._last_price_log = True
+                            new_price = quote['price']
+                            position.update_price(new_price)
+                            
+                            # Always log for debugging stuck prices
+                            self.logger.info(f"[{self.bot_id}] Position {symbol}: old=${old_price}, new=${new_price}, P&L=${position.unrealized_pnl:.2f}")
+                else:
+                    self.logger.warning(f"[{self.bot_id}] No quote returned for {symbol}")
                             
             except Exception as e:
-                self.logger.error(f"[{self.bot_id}] Failed to update price for {symbol}: {e}")
+                self.logger.error(f"[{self.bot_id}] Failed to update price for {symbol}: {e}", exc_info=True)
     
     async def _check_entries(self):
         """Check for entry opportunities"""
