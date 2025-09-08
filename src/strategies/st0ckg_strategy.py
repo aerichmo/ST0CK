@@ -20,6 +20,14 @@ class ST0CKGStrategy(TradingStrategy):
     - Trades SPY options at key price levels
     - Uses advanced signal detection
     - Dynamic position management with R-based targets
+    
+    Andy Antilles Greystone Trading Logic:
+    1. Wait 30 minutes after market open for opening range establishment
+    2. Only trade during specific windows (9:40 AM - 10:30 AM default)
+    3. Minimum 30-minute cooldown between trades
+    4. Only take high-confidence signals (score thresholds per signal type)
+    5. Maximum 5 trades per day (quality over quantity)
+    6. R-based profit targets: 1.5R scale, 3R final target
     """
     
     def __init__(self, 
@@ -76,19 +84,25 @@ class ST0CKGStrategy(TradingStrategy):
         self.daily_trades = 0
         self.last_signal_time = {}  # Track last signal time by type
         self.signal_cooldown = 300  # 5 minute cooldown between same signal type
+        
+        # Andy Antilles Greystone entry logic - proper timing
+        self.last_trade_time = None
+        self.trade_cooldown = 1800  # 30 minute cooldown between trades
+        self.opening_range_complete = False  # Flag to wait for opening range
+        self.opening_range_time = 30  # Minutes after open to establish range
     
     def get_config(self) -> Dict[str, Any]:
         """Get strategy configuration"""
         return {
             'strategy': 'st0ckg',
-            'trading_window_start': 'Any time',
-            'trading_window_end': 'Market hours',
+            'trading_window_start': self.start_time,  # Use configured start time
+            'trading_window_end': self.end_time,      # Use configured end time
             'max_positions': self.max_positions,
             'risk_per_trade': self.risk_per_trade,
-            'cycle_delay': 2,  # 2 second cycle for options
+            'cycle_delay': 5,  # 5 second cycle to reduce overtrading
             'max_consecutive_losses': 3,
             'max_daily_loss': -500.0,
-            'max_daily_trades': 10
+            'max_daily_trades': 5  # Reduce from 10 to 5 for better quality trades
         }
     
     async def get_required_market_data(self, market_data_provider) -> Dict[str, Any]:
@@ -148,10 +162,33 @@ class ST0CKGStrategy(TradingStrategy):
     def check_entry_conditions(self, market_data: Dict[str, Any], positions: Dict[str, Position]) -> Optional[Dict[str, Any]]:
         """
         Check for Battle Lines entry signals
+        Implements Andy Antilles Greystone entry logic
         """
         now = datetime.now(self.eastern)
         
-        # Trading window check removed - bot can trade at any time
+        # 1. Check if we're in the proper trading window
+        if not self._in_trading_window(now):
+            return None
+            
+        # 2. Wait for opening range to establish (Andy Antilles logic)
+        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        time_since_open = (now - market_open).total_seconds() / 60
+        
+        if time_since_open < self.opening_range_time:
+            if not hasattr(self, '_opening_range_log') or (now - self._opening_range_log).seconds > 60:
+                self.logger.info(f"Waiting for opening range to establish: {int(self.opening_range_time - time_since_open)} minutes remaining")
+                self._opening_range_log = now
+            return None
+        
+        # 3. Check if sufficient time has passed since last trade
+        if self.last_trade_time:
+            time_since_trade = (now - self.last_trade_time).total_seconds()
+            if time_since_trade < self.trade_cooldown:
+                remaining = int((self.trade_cooldown - time_since_trade) / 60)
+                if not hasattr(self, '_cooldown_log') or (now - self._cooldown_log).seconds > 300:
+                    self.logger.info(f"Trade cooldown active: {remaining} minutes remaining")
+                    self._cooldown_log = now
+                return None
         
         # Check position limit
         if len(positions) >= self.max_positions:
@@ -193,6 +230,24 @@ class ST0CKGStrategy(TradingStrategy):
         best_signal = max(signals.items(), key=lambda x: x[1].get('score', 0))
         signal_type, signal_data = best_signal
         
+        # Andy Antilles logic: Only take high-confidence signals
+        min_score_requirements = {
+            'GAMMA_SQUEEZE': 6.0,    # High threshold for gamma squeeze
+            'VWAP_RECLAIM': 5.0,     # Medium threshold for VWAP
+            'OPENING_DRIVE': 6.0,    # High threshold for opening drive
+            'LIQUIDITY_VACUUM': 5.0, # Medium threshold
+            'OPTIONS_PIN': 4.0,      # Lower threshold (time-based)
+            'DARK_POOL_FLOW': 4.5    # Medium-low threshold
+        }
+        
+        min_score = min_score_requirements.get(signal_type, 5.0)
+        if signal_data.get('score', 0) < min_score:
+            return None
+            
+        # Check signal confidence level
+        if signal_data.get('confidence', 'LOW') == 'LOW':
+            return None
+        
         # Check signal cooldown
         last_signal = self.last_signal_time.get(signal_type)
         if last_signal:
@@ -217,8 +272,12 @@ class ST0CKGStrategy(TradingStrategy):
                               extra={"signal_type": signal_type, "current_price": spy_price})
             return None
         
-        # Update last signal time
+        # Update last signal time AND last trade time (Andy Antilles logic)
         self.last_signal_time[signal_type] = now
+        self.last_trade_time = now  # Enforce trade cooldown
+        
+        # Log trade decision with score
+        self.logger.info(f"Taking {signal_type} signal with score {signal_data.get('score', 0):.1f} (min required: {min_score})")
         
         # Return comprehensive signal
         return {
