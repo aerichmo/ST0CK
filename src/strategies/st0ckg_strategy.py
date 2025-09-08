@@ -323,7 +323,7 @@ class ST0CKGStrategy(TradingStrategy):
         r_multiple = spy_move / 0.10  # $0.10 = 1R
         
         # Log R-multiple for monitoring
-        if not hasattr(self, '_last_r_log') or (now - self._last_r_log).seconds > 30:
+        if not hasattr(self, '_last_r_log') or (now - self._last_r_log).seconds > 5:
             self.logger.info(f"Position {position.symbol}: SPY moved ${spy_move:.2f}, R={r_multiple:.2f}")
             self._last_r_log = now
         
